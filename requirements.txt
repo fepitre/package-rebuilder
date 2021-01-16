@@ -1,0 +1,4 @@
+requests
+celery
+packaging
+debian

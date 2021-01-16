@@ -1,0 +1,116 @@
+version: '3'
+
+services:
+
+### rebuilder_base
+
+  base:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+
+### Celery
+
+  broker:
+    image: 'docker.io/rabbitmq:3-management'
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - '/var/lib/rebuilder/broker/data:/var/lib/rabbitmq'
+      - '/var/lib/rebuilder/broker/log:/var/log/rabbitmq'
+
+### QubesRebuilder
+
+  db:
+    image: 'docker.io/mongo'
+    ports:
+      - '27017:27017'
+    volumes:
+      - '/var/lib/rebuilder/db:/data/db'
+    command: --quiet
+
+  getter:
+    image: 'rebuilder_base'
+    volumes:
+      - .:/app
+    depends_on:
+      - broker
+      - db
+    links:
+      - broker
+      - db
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - MONGO_URL=mongodb://db:27017
+# https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
+    entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
+
+  rebuilder:
+    privileged: true
+    build:
+      context: .
+      dockerfile: rebuilder.Dockerfile
+    volumes:
+      - .:/app
+# rebuilder worker(s) need(s) artifacts directory and GPG for signing in-toto metadata
+      - '/var/lib/rebuilder/deb:/deb'
+      - '/var/lib/rebuilder/gnupg:/root/.gnupg'
+      - '/var/lib/rebuilder/log:/log'
+    depends_on:
+      - broker
+    links:
+      - broker
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+# https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
+    entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
+# This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
+#    deploy:
+#      mode: replicated
+#      replicas: 2
+
+  recorder:
+    image: 'rebuilder_base'
+    volumes:
+      - .:/app
+    depends_on:
+      - broker
+      - db
+    links:
+      - broker
+      - db
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - MONGO_URL=mongodb://db:27017
+    entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=record
+
+  uploader:
+    image: 'rebuilder_base'
+    volumes:
+      - .:/app
+# uploader worker needs artifacts directory and SSH key for rsyncing on remote location
+      - '/var/lib/rebuilder/deb:/deb'
+      - '/var/lib/rebuilder/ssh:/root/.ssh'
+      - '/var/lib/rebuilder/log:/log'
+    depends_on:
+      - broker
+    links:
+      - broker
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+    entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
+
+#  debugger:
+#    image: 'rebuilder_base'
+#    volumes:
+#      - .:/app
+#    links:
+#      - broker
+#    depends_on:
+#      - broker
+#    environment:
+#      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+#    entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=fail
