@@ -33,7 +33,7 @@ class Rebuilder:
         self.package = package
         self.snapshot_query_url = snapshot_query_url
         self.sign_keyid = sign_keyid
-        self.logfile = "/log/{}-{}.log".format(package, str(int(time.time())))
+        self.logfile = "{}-{}.log".format(package, str(int(time.time())))
 
     def get_sources_dir(self):
         return '/deb/r{}/{}/sources'.format(
@@ -63,6 +63,7 @@ class Rebuilder:
                 build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
 
             build_cmd += [
+                "--no-checksums-verification",
                 "--gpg-verify",
                 "--gpg-verify-key=/opt/debrebuild/tests/keys/qubes-debian-r4.asc",
                 "--extra-repository-file=/opt/debrebuild/tests/repos/qubes-r4.list",
@@ -77,10 +78,17 @@ class Rebuilder:
 
             # Originally check=True was used but it seems that we cannot
             # get captured output?
+            if result.returncode == 0:
+                self.logfile = '/log-ok/{}'.format(self.logfile)
+            else:
+                self.logfile = '/log-fail/{}'.format(self.logfile)
+
+            with open(self.logfile, 'w') as fd:
+                fd.write(result.stdout.decode('utf8'))
+
             if result.returncode != 0:
-                with open(self.logfile, 'w') as fd:
-                    fd.write(result.stdout.decode('utf8'))
-                raise subprocess.CalledProcessError(result.returncode, build_cmd)
+                raise subprocess.CalledProcessError(
+                    result.returncode, build_cmd)
 
             # create symlink to new buildinfo and rebuild link file
             os.chdir(self.get_output_dir())

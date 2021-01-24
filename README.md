@@ -86,7 +86,7 @@ $ systemctl daemon-reload
 
 Create the following folders:
 ```
-$ mkdir -p /var/lib/rebuilder/{deb,yum,broker,db,ssh,gnupg,log}
+$ mkdir -p /var/lib/rebuilder/{deb,yum,broker,db,ssh,gnupg,log-ok,log-fail}
 ```
 
 The previously created folders are mounted differently into containers to store or share persistent data

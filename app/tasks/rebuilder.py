@@ -107,7 +107,6 @@ def get(release, package_set, dist):
 @app.task(base=RebuilderTask)
 def rebuild(package):
     status = True
-    log_only = False
     # TODO: improve serialize/deserialize Package
     try:
         package = BuildPackage.fromdict(package)
@@ -123,10 +122,9 @@ def rebuild(package):
         except RebuilderExceptionBuild as e:
             log.error(str(e))
             status = False
-            log_only = True
     else:
         log.debug("{}: in-toto metadata already exists.".format(package))
-    upload.delay(package, log_only)
+    upload.delay(package, status)
     record.delay(package, status)
     return status
 
@@ -165,15 +163,14 @@ def record(package, build_status):
 
 @app.task(base=RebuilderTask, default_retry_delay=60, max_retries=3,
           autoretry_for=[RebuilderExceptionUpload])
-def upload(package, log_only=False):
+def upload(package, build_status):
     status = True
-    if not log_only:
-        try:
-            package = BuildPackage.fromdict(package)
-        except KeyError as e:
-            # We should never get here but in case of manual task call
-            log.error("Failed to parse package.")
-            raise RebuilderExceptionUpload(str(e))
+    try:
+        package = BuildPackage.fromdict(package)
+    except KeyError as e:
+        # We should never get here but in case of manual task call
+        log.error("Failed to parse package.")
+        raise RebuilderExceptionUpload(str(e))
     try:
         if Config['ssh_key'] and Config['remote_ssh_host'] and \
                 Config['remote_ssh_basedir']:
@@ -181,31 +178,35 @@ def upload(package, log_only=False):
             # Use code in fepitre/qubes-components-manager
 
             # pay attention to latest "/", we use rsync!
-            if log_only:
-                local_dir = "/log/"
-            else:
-                local_dir = "/deb/r{}/{}/".format(
+            if build_status:
+                local_log_dir = "/log-ok/"
+                local_build_dir = "/deb/r{}/{}/".format(
                     package.release, package.package_set)
+                dir_to_upload = [local_log_dir, local_build_dir]
+            else:
+                local_log_dir = "/log-fail/"
+                dir_to_upload = [local_log_dir]
 
-            remote_host = Config['remote_ssh_host']
-            remote_basedir = Config['remote_ssh_basedir']
-            remote_dir = "{}/{}".format(remote_basedir, local_dir)
-            remote_path = "{}:{}".format(remote_host, remote_dir)
+            for local_dir in dir_to_upload:
+                remote_host = Config['remote_ssh_host']
+                remote_basedir = Config['remote_ssh_basedir']
+                remote_dir = "{}/{}".format(remote_basedir, local_dir)
+                remote_path = "{}:{}".format(remote_host, remote_dir)
 
-            createfolder_cmd = [
-                "ssh", "-i", "/root/.ssh/{}".format(Config['ssh_key']),
-                "-o", "StrictHostKeyChecking=no", "{}".format(remote_host),
-                "mkdir", "-p", "{}".format(remote_dir)
-            ]
-            subprocess.run(createfolder_cmd, check=True)
+                createfolder_cmd = [
+                    "ssh", "-i", "/root/.ssh/{}".format(Config['ssh_key']),
+                    "-o", "StrictHostKeyChecking=no", "{}".format(remote_host),
+                    "mkdir", "-p", "{}".format(remote_dir)
+                ]
+                subprocess.run(createfolder_cmd, check=True)
 
-            cmd = [
-                "rsync", "-av", "--progress", "-e",
-                "ssh -i /root/.ssh/{} -o StrictHostKeyChecking=no".format(
-                    Config['ssh_key']),
-                local_dir, remote_path
-            ]
-            subprocess.run(cmd, check=True)
+                cmd = [
+                    "rsync", "-av", "--progress", "-e",
+                    "ssh -i /root/.ssh/{} -o StrictHostKeyChecking=no".format(
+                        Config['ssh_key']),
+                    local_dir, remote_path
+                ]
+                subprocess.run(cmd, check=True)
         else:
             log.critical('Missing SSH key or SSH remote destination')
             status = False

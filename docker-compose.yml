@@ -64,7 +64,8 @@ services:
 # rebuilder worker(s) need(s) artifacts directory and GPG for signing in-toto metadata
       - '/var/lib/rebuilder/deb:/deb'
       - '/var/lib/rebuilder/gnupg:/root/.gnupg'
-      - '/var/lib/rebuilder/log:/log'
+      - '/var/lib/rebuilder/log-ok:/log-ok'
+      - '/var/lib/rebuilder/log-fail:/log-fail'
     depends_on:
       - broker
       - snapshot
@@ -102,7 +103,8 @@ services:
 # uploader worker needs artifacts directory and SSH key for rsyncing on remote location
       - '/var/lib/rebuilder/deb:/deb'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
-      - '/var/lib/rebuilder/log:/log'
+      - '/var/lib/rebuilder/log-ok:/log-ok'
+      - '/var/lib/rebuilder/log-fail:/log-fail'
     depends_on:
       - broker
     links:
