@@ -13,7 +13,8 @@ services:
 ### Celery
 
   broker:
-    image: 'docker.io/rabbitmq:3-management'
+# 'docker.io/rabbitmq:3-management'
+    image: 'docker.io/rabbitmq@sha256:2b88e8f43d230e2a786ebb2bcdfb0ebffbc77806698e4293f8500ed7c94ec1cf'
     ports:
       - '5672:5672'
       - '15672:15672'
@@ -31,7 +32,8 @@ services:
       - '5000:5000'
 
   db:
-    image: 'docker.io/mongo'
+# 'docker.io/mongo'
+    image: 'docker.io/mongo@sha256:06ba42906e0346c15a795ff6ebcb3ac88be0f85aa899a6225979029188e312c6'
     ports:
       - '27017:27017'
     volumes:
@@ -112,15 +114,3 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
-
-#  debugger:
-#    image: 'rebuilder_base'
-#    volumes:
-#      - .:/app
-#    links:
-#      - broker
-#    depends_on:
-#      - broker
-#    environment:
-#      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
-#    entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=fail

@@ -1,4 +1,5 @@
-FROM debian:bullseye
+# debian/bullseye; amd64
+FROM debian@sha256:3b19d4bb1d801f238bffedb4432021542217a25cf428b2cebe2ca49350e3c13d
 MAINTAINER Frédéric Pierret <frederic.pierret@qubes-os.org>
 RUN apt-get update && apt-get -y upgrade && \
     apt-get install -y git rsync celery python3-requests python3-celery \

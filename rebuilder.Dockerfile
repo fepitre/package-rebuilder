@@ -3,8 +3,4 @@ MAINTAINER Frédéric Pierret <frederic.pierret@qubes-os.org>
 
 # REBUILDER
 RUN apt-get update && apt-get install -y mmdebstrap in-toto python3-dateutil && apt-get clean all
-
-# TODO: It lacks signature/checksum verification!
-# TODO: We need packages for debrebuild and gemato
-RUN cd /opt && git clone https://github.com/fepitre/debrebuild
-RUN pip3 install gemato
+RUN git clone https://github.com/fepitre/debrebuild /opt/debrebuild && cd /opt/debrebuild && git checkout 8864c0d974a9ad54ba7b4d939405c1055acf61f5

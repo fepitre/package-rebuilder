@@ -5,8 +5,7 @@ RUN apt-get update && \
     apt-get install -y python3-flask python3-flask-caching && \
     apt-get clean all
 
-# TODO: It lacks signature/checksum verification!
-RUN git clone https://github.com/fepitre/qubes-snapshot /app
+RUN git clone https://github.com/fepitre/qubes-snapshot /app && cd /app && git checkout c158251284285fdf1a072a8f08a5e30c2b3ae1e1
 
 EXPOSE 5000
 
