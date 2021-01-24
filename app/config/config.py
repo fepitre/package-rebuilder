@@ -41,6 +41,9 @@ if 'CELERY_BROKER_URL' in os.environ:
 if 'MONGO_URL' in os.environ:
     mongodb = os.environ['MONGO_URL']
 
+snapshot = config.get('DEFAULT', 'snapshot',
+                      fallback='http://snapshot.debian.org')
+
 try:
     schedule = int(config.get('DEFAULT', 'schedule', fallback=DEFAULT_SCHEDULE))
 except ValueError:
@@ -53,6 +56,7 @@ remote_ssh_basedir = config.get('DEFAULT', 'repo-remote-ssh-basedir')
 Config = {
     'broker': broker,
     'mongodb': mongodb,
+    'snapshot': snapshot,
     'schedule': schedule,
     'sign_keyid': sign_keyid,
     'ssh_key': ssh_key,

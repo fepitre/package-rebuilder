@@ -29,8 +29,9 @@ from app.libs.exceptions import RebuilderExceptionBuild
 
 
 class Rebuilder:
-    def __init__(self, package, sign_keyid=None):
+    def __init__(self, package, snapshot_query_url, sign_keyid=None):
         self.package = package
+        self.snapshot_query_url = snapshot_query_url
         self.sign_keyid = sign_keyid
         self.logfile = "/log/{}-{}.log".format(package, str(int(time.time())))
 
@@ -56,7 +57,7 @@ class Rebuilder:
                 "--debug",
                 "--builder=mmdebstrap",
                 "--output={}".format(self.get_output_dir()),
-                "--query-url=https://ancient-tundra-75419.herokuapp.com",
+                "--query-url={}".format(self.snapshot_query_url),
             ]
             if self.sign_keyid:
                 build_cmd += ["--gpg-sign-keyid", self.sign_keyid]

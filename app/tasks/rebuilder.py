@@ -114,7 +114,8 @@ def rebuild(package):
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild(str(e))
-    builder = Rebuilder(package=package, sign_keyid=Config['sign_keyid'])
+    builder = Rebuilder(package=package, snapshot_query_url=Config['snapshot'],
+                        sign_keyid=Config['sign_keyid'])
     metadata = os.path.join(builder.get_output_dir(), 'metadata')
     if not os.path.exists(metadata):
         try:

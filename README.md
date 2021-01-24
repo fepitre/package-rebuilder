@@ -37,7 +37,13 @@ The `getter` service is responsible to get the latest `buildinfo` on `QubesOS` r
 created with a `record` task. Notably, a build record contains all the information about a build, its status and 
 the number of retries. All build records are stored into a `Mongo` database provided by `db` service which is
 only linked with `getter` and `recorder` services. It does not receive tasks, it is just a database backend.
-The only scalable service here is the `rebuilder`. 
+In the same way, the `rebuilder` service has its rebuild tools using a snapshot API to query packages information (see:
+https://github.com/fepitre/qubes-snapshot and https://snapshot.debian.org/). For that, we provide `snapshot` service only
+linked to `rebuilder` service. The `fepitre/qubes-snapshot` provides snapshot API endpoints for Qubes OS repositories,
+and it proxify requests to upstream repositories. A simple cache is implemented in order to manage the huge number of
+requests made by rebuild tools.
+
+In all the provided services, the only scalable one here is the `rebuilder`.
 
 ## QubesRebuilder: the machinery 
 

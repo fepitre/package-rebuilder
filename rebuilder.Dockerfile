@@ -1,4 +1,5 @@
 FROM rebuilder_base:latest
+MAINTAINER Frédéric Pierret <frederic.pierret@qubes-os.org>
 
 # REBUILDER
 RUN apt-get update && apt-get install -y mmdebstrap in-toto python3-dateutil && apt-get clean all

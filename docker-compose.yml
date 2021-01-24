@@ -5,11 +5,10 @@ services:
 ### rebuilder_base
 
   base:
+    image: rebuilder_base
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - .:/app
 
 ### Celery
 
@@ -23,6 +22,13 @@ services:
       - '/var/lib/rebuilder/broker/log:/var/log/rabbitmq'
 
 ### QubesRebuilder
+
+  snapshot:
+    build:
+      context: .
+      dockerfile: snapshot.Dockerfile
+    ports:
+      - '5000:5000'
 
   db:
     image: 'docker.io/mongo'
@@ -61,8 +67,10 @@ services:
       - '/var/lib/rebuilder/log:/log'
     depends_on:
       - broker
+      - snapshot
     links:
       - broker
+      - snapshot
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
