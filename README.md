@@ -32,7 +32,7 @@ The chosen `broker` here for `celery` is `RabbitMQ`. Each service is doing only 
 | recorder | record |
 
 The `getter` service is responsible to get the latest `buildinfo` on `QubesOS` repositories and to add new 
-`rebuild` tasks. Once a `rebuilder` has finished a `rebuild` task, on success, it add a new `upload` task for
+`rebuild` tasks. Once a `rebuilder` has finished a `rebuild` task, on success, it adds a new `upload` task for
 `uploader`. Either on success or failure, a build record containing useful information about the build is 
 created with a `record` task. Notably, a build record contains all the information about a build, its status and 
 the number of retries. All build records are stored into a `Mongo` database provided by `db` service which is
@@ -83,11 +83,13 @@ Create the following folders:
 $ mkdir -p /var/lib/rebuilder/{deb,yum,broker,db,ssh,gnupg,log}
 ```
 
-The previously created folders are mounted differently into containers to store or share persistent
-data (see `docker-compose.yml`). In `gnupg` folder you need to provide a GPG keyring containing private key used
+The previously created folders are mounted differently into containers to store or share persistent data
+(see `/opt/rebuilder/docker-compose.yml`). In `gnupg` folder you need to provide a GPG keyring containing private key used
 to sign `in-toto` metadata. In `ssh` folder you need to add a private SSH key allowed to push on a remote host
 destination. Then, you need to edit the configuration file `/opt/rebuilder/rebuilder.conf` which will be injected
-into `docker` images having all the needed configuration information. For example, here is the one used by `notset-rebuilder`:
+into `docker` images having all the needed configuration information.
+
+For example, here is the one used by `notset-rebuilder`:
 ```ini
 [DEFAULT]
 broker = amqp://guest:guest@broker:5672/
@@ -106,7 +108,9 @@ repo-remote-ssh-basedir = /data/qubes/rebuild
 ```
 In the current `docker` setup, you only need to adjust `in-toto-sign-key-fpr`, `repo-ssh-key`, `repo-remote-ssh-host`
 and `repo-remote-ssh-basedir` values. Here `schedule` value is the time in second for which `get` task will be
-run periodically. Default here is `30 minutes`.
+run periodically. Default here is `30 minutes`. Please note that values for `broker` and `mongodb` variables refers
+to `docker` containers `broker` and `db` defined in `docker-compose.yml`. If you would like to change the `db` container
+name in `docker-compose.yml`, say `myrebuilddb`, you would have to set `mongodb = mongodb://myrebuilddb:27017/`.
 
 You can now enable and start the service:
 ```
@@ -114,7 +118,7 @@ $ systemctl enable rebuilder
 $ systemctl start rebuilder
 ```
 
-Please note that the first start of `rebuilder` service can take few minutes. In background it creates all 
+Please note that the first start of `rebuilder` service can take few minutes. In background, it creates all
 needed docker images.
 
 Once it's started, it will fetch for new buildinfo files in Qubes repositories periodically every `30 minutes`
@@ -126,12 +130,11 @@ $ CELERY_BROKER_URL="amqp://guest:guest@localhost:5672/" ./init_feed.py
 
 > TODO: Add initial feed if `rebuild` queue is empty like.
 
-## QubesRebuilder: artifacts
+## Check rebuild proofs before installing packages: apt-transport-in-toto
 
-In this section, we give configuration files associated to rebuild artifacts for `bullseye` based qube.
-
-For more details on `in-toto`, its `apt` transport setup and configurations options, we refer 
-to upstream projects https://in-toto.readthedocs.io and https://github.com/in-toto/apt-transport-in-toto.
+In this section, we give configuration steps for `bullseye` based qube in order to use rebuild proofs before installing
+packages thank to `apt-transport-in-toto`. For more details on `in-toto`, its `apt` transport setup and configurations
+options, we refer to upstream projects https://in-toto.readthedocs.io and https://github.com/in-toto/apt-transport-in-toto.
 
 ### Installation
 
