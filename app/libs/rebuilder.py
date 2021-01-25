@@ -23,6 +23,7 @@ import subprocess
 import shutil
 import glob
 import time
+import tempfile
 
 from debian.deb822 import Deb822
 from app.libs.exceptions import RebuilderExceptionBuild
@@ -48,15 +49,21 @@ class Rebuilder:
             self.package.version
         )
 
+    def gen_temp_dir(self):
+        tempdir = tempfile.mkdtemp(
+            prefix='{}-{}'.format(self.package.name, self.package.version))
+        return tempdir
+
     def run(self):
         try:
             # TODO: This will be generalized with wrapper for DEB and RPM
+            tempdir = self.gen_temp_dir()
             build_cmd = [
                 "python3",
                 "/opt/debrebuild/debrebuild.py",
                 "--debug",
                 "--builder=mmdebstrap",
-                "--output={}".format(self.get_output_dir()),
+                "--output={}".format(tempdir),
                 "--query-url={}".format(self.snapshot_query_url),
             ]
             if self.sign_keyid:
@@ -72,7 +79,6 @@ class Rebuilder:
             ]
             # rebuild
             env = os.environ.copy()
-            # env["TMPDIR"] = "/var/tmp"
             result = subprocess.run(build_cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, env=env)
 
@@ -90,24 +96,20 @@ class Rebuilder:
                 raise subprocess.CalledProcessError(
                     result.returncode, build_cmd)
 
+            os.chdir(tempdir)
+            buildinfo = glob.glob("{}*.buildinfo".format(self.package.name))[0]
+            link = glob.glob("rebuild*.link")[0]
+
+            # create final output directory
+            os.makedirs(self.get_output_dir(), exist_ok=True)
+            shutil.copy2(os.path.join(tempdir, buildinfo), self.get_output_dir())
+            shutil.copy2(os.path.join(tempdir, link), self.get_output_dir())
+            shutil.rmtree(tempdir)
+
             # create symlink to new buildinfo and rebuild link file
             os.chdir(self.get_output_dir())
-            buildinfo = glob.glob(
-                "{}*.buildinfo".format(self.package.name))[0]
-            link = glob.glob("rebuild*.link")[0]
             os.symlink(buildinfo, "buildinfo")
             os.symlink(link, "metadata")
-
-            # clean useless artifacts
-            extracted_srcdir = "{}-{}".format(
-                self.package.name, self.package.version.split('-')[0])
-            shutil.rmtree(extracted_srcdir)
-
-            files_to_remove = glob.glob("*.deb")
-            files_to_remove += glob.glob("*.changes")
-            files_to_remove += glob.glob("*.tar.*")
-            for f in files_to_remove:
-                os.remove(f)
 
             with open(buildinfo) as fd:
                 for paragraph in Deb822.iter_paragraphs(fd.read()):
