@@ -91,6 +91,7 @@ def get(release, package_set, dist):
             buildrecord = db.get_buildrecord(package)
             if buildrecord and buildrecord['retry'] == 3:
                 log.error("{}: max retry reached.".format(package))
+                continue
             if buildrecord and buildrecord['status'] == "success":
                 log.debug("{}: already built.".format(package))
                 continue
