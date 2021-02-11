@@ -24,73 +24,109 @@ import shutil
 import glob
 import time
 import tempfile
+import debian.deb822
 
-from debian.deb822 import Deb822
+from app.libs.common import is_qubes, is_debian, is_fedora
 from app.libs.exceptions import RebuilderExceptionBuild
 
 
-class Rebuilder:
-    def __init__(self, package, snapshot_query_url, sign_keyid=None):
+# TODO: Don't use wrapper but import directly Rebuilder functions
+#       from debrebuild and rpmreproduce
+
+
+def getRebuilder(package, **kwargs):
+    if is_qubes(package.dist):
+        qubes_release, package_set, dist = \
+            package.dist.lstrip('qubes-').split('-', 2)
+        if is_debian(dist):
+            rebuilder = QubesRebuilderDEB(package, **kwargs)
+        elif is_fedora(dist):
+            rebuilder = QubesRebuilderRPM(package, **kwargs)
+        else:
+            raise RebuilderExceptionBuild(
+                f"Unsupported Qubes distribution: {package.dist}")
+    elif is_fedora(package.dist):
+        rebuilder = FedoraRebuilder(package, **kwargs)
+    elif is_debian(package.dist):
+        rebuilder = DebianRebuilder(package, **kwargs)
+    else:
+        raise RebuilderExceptionBuild(
+            f"Unsupported distribution: {package.dist}")
+    return rebuilder
+
+
+class BaseRebuilder:
+    def __init__(self, package, **kwargs):
         self.package = package
-        self.snapshot_query_url = snapshot_query_url
-        self.sign_keyid = sign_keyid
+        self.sign_keyid = kwargs.get('sign_keyid', None)
         self.logfile = "{}-{}.log".format(package, str(int(time.time())))
-
-    def get_sources_dir(self):
-        return '/deb/r{}/{}/sources'.format(
-            self.package.release,
-            self.package.package_set
-        )
-
-    def get_output_dir(self):
-        return '{}/{}/{}'.format(
-            self.get_sources_dir(),
-            self.package.name,
-            self.package.version
-        )
 
     def gen_temp_dir(self):
         tempdir = tempfile.mkdtemp(
             prefix='{}-{}'.format(self.package.name, self.package.version))
         return tempdir
 
+    def get_output_dir(self):
+        pass
+
+
+class FedoraRebuilder:
+    def __init__(self, package, **kwargs):
+        pass
+
+
+class DebianRebuilder(BaseRebuilder):
+    def __init__(self, package, **kwargs):
+        super().__init__(package, **kwargs)
+        self.logfile = "debian-{}".format(self.logfile)
+        self.basedir = "/rebuild/debian"
+        self.snapshot_query_url = kwargs.get(
+            'snapshot_query_url', 'http://snapshot.debian.org')
+        self.extra_build_args = None
+
+    def get_output_dir(self):
+        return '{}/sources/{}/{}'.format(
+            self.basedir,
+            self.package.name,
+            self.package.version
+        )
+
+    def debrebuild(self, tempdir):
+        build_cmd = [
+            "python3",
+            "/opt/debrebuild/debrebuild.py",
+            "--debug",
+            "--use-metasnap",
+            "--builder=mmdebstrap",
+            "--output={}".format(tempdir),
+            "--query-url={}".format(self.snapshot_query_url),
+            "--no-checksums-verification",
+        ]
+        if self.sign_keyid:
+            build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
+        if self.extra_build_args:
+            build_cmd += self.extra_build_args
+        build_cmd += [self.package.url]
+
+        # rebuild
+        env = os.environ.copy()
+        result = subprocess.run(build_cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, env=env)
+        return result, build_cmd
+
     def run(self):
         try:
-            # TODO: This will be generalized with wrapper for DEB and RPM
             tempdir = self.gen_temp_dir()
-            build_cmd = [
-                "python3",
-                "/opt/debrebuild/debrebuild.py",
-                "--debug",
-                "--builder=mmdebstrap",
-                "--output={}".format(tempdir),
-                "--query-url={}".format(self.snapshot_query_url),
-            ]
-            if self.sign_keyid:
-                build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
+            result, build_cmd = self.debrebuild(tempdir)
 
-            build_cmd += [
-                "--no-checksums-verification",
-                "--gpg-verify",
-                "--gpg-verify-key=/opt/debrebuild/tests/keys/qubes-debian-r4.asc",
-                "--extra-repository-file=/opt/debrebuild/tests/repos/qubes-r4.list",
-                "--extra-repository-key=/opt/debrebuild/tests/keys/qubes-debian-r4.asc",
-                self.package.url
-            ]
-            # rebuild
-            env = os.environ.copy()
-            result = subprocess.run(build_cmd, stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, env=env)
-
-            # Originally check=True was used but it seems that we cannot
-            # get captured output?
             if result.returncode == 0:
-                self.logfile = '/log-ok/{}'.format(self.logfile)
+                self.logfile = f'{self.basedir}/log-ok/{self.logfile}'
             else:
-                self.logfile = '/log-fail/{}'.format(self.logfile)
+                self.logfile = f'{self.basedir}/log-fail/{self.logfile}'
 
-            with open(self.logfile, 'w') as fd:
-                fd.write(result.stdout.decode('utf8'))
+            os.makedirs(os.path.dirname(self.logfile), exist_ok=True)
+            with open(self.logfile, 'wb') as fd:
+                fd.write(result.stdout)
 
             if result.returncode != 0:
                 raise subprocess.CalledProcessError(
@@ -102,23 +138,22 @@ class Rebuilder:
 
             # create final output directory
             os.makedirs(self.get_output_dir(), exist_ok=True)
-            shutil.copy2(os.path.join(tempdir, buildinfo), self.get_output_dir())
+            shutil.copy2(
+                os.path.join(tempdir, buildinfo), self.get_output_dir())
             shutil.copy2(os.path.join(tempdir, link), self.get_output_dir())
             shutil.rmtree(tempdir)
 
             # create symlink to new buildinfo and rebuild link file
             os.chdir(self.get_output_dir())
-            os.symlink(buildinfo, "buildinfo")
+            if buildinfo:
+                os.symlink(buildinfo, "buildinfo")
             os.symlink(link, "metadata")
 
             with open(buildinfo) as fd:
-                for paragraph in Deb822.iter_paragraphs(fd.read()):
-                    for item in paragraph.items():
-                        if item[0] == 'Binary':
-                            binary = item[1].split()
+                parsed_buildinfo = debian.deb822.BuildInfo(fd)
 
-            os.chdir(self.get_sources_dir())
-            for binpkg in binary:
+            os.chdir(os.path.join(self.get_output_dir(), '../../'))
+            for binpkg in parsed_buildinfo.get_binary():
                 if not os.path.exists(binpkg):
                     os.symlink(self.package.name, binpkg)
 
@@ -128,3 +163,23 @@ class Rebuilder:
                 shutil.rmtree(self.get_output_dir())
             raise RebuilderExceptionBuild(
                 "Failed to build {}: {}".format(self.package.url, str(e)))
+
+
+class QubesRebuilderRPM(FedoraRebuilder):
+    def __init__(self, package, **kwargs):
+        super().__init__(package, **kwargs)
+
+
+class QubesRebuilderDEB(DebianRebuilder):
+    def __init__(self, package, **kwargs):
+        super().__init__(package, **kwargs)
+        qubes_release, package_set, _ = \
+            package.dist.lstrip('qubes-').split('-', 2)
+        self.basedir = f'/rebuild/qubes/deb/r{qubes_release}/{package_set}'
+        self.logfile = self.logfile.replace('debian-', '')
+        self.extra_build_args = [
+            "--gpg-verify",
+            "--gpg-verify-key=/opt/debrebuild/tests/keys/qubes-debian-r4.asc",
+            "--extra-repository-file=/opt/debrebuild/tests/repos/qubes-r4.list",
+            "--extra-repository-key=/opt/debrebuild/tests/keys/qubes-debian-r4.asc",
+        ]

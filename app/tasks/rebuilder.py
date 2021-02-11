@@ -29,8 +29,8 @@ from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, \
     RebuilderExceptionRecord
-from app.libs.getter import Repository, BuildPackage
-from app.libs.rebuilder import Rebuilder
+from app.libs.getter import getRepository, BuildPackage
+from app.libs.rebuilder import getRebuilder
 from app.libs.recorder import Recorder
 
 
@@ -61,27 +61,29 @@ def is_task_active_or_reserved_or_scheduled(args):
     for d in queues:
         for _, queue in d.items():
             for task in queue:
-                tasks_args.append(task['args'][0])
+                if task.get('args'):
+                    tasks_args.append(task['args'][0])
     return dict(args) in tasks_args
 
 
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
     schedule = Config['schedule']
-    # sender.add_periodic_task(
-    #     schedule, get.s("4.0", "vm", "bullseye"), name="r4.0/vm/bullseye")
-    sender.add_periodic_task(
-        schedule, get.s("4.1", "vm", "bullseye"), name="r4.1/vm/bullseye")
+    for dist in Config['dist'].split():
+        sender.add_periodic_task(schedule, get.s(dist, "x86_64"), name=dist)
 
 
 @app.task(base=RebuilderTask)
-def get(release, package_set, dist):
+def get(dist, arch):
     status = True
-    repo = Repository()
+    repo = getRepository(dist)
     try:
-        packages = repo.get_packages(release, package_set, dist)
+        packages = repo.get_buildpackages(arch)
         db = Recorder(Config['mongodb'])
         for name in packages.keys():
+            if not packages[name]:
+                # log.error(f"Nothing to build for package {name} ({dist})")
+                continue
             package = packages[name][0]
             # We have implemented a retry information to prevent useless retry
             # from periodic tasks submission. This is to ensure fail status
@@ -90,15 +92,15 @@ def get(release, package_set, dist):
             # celery status/result in a mongodb backend directly.
             buildrecord = db.get_buildrecord(package)
             if buildrecord and buildrecord['retry'] == 3:
-                log.error("{}: max retry reached.".format(package))
+                log.error(f"{package}: max retry reached.")
                 continue
             if buildrecord and buildrecord['status'] == "success":
-                log.debug("{}: already built.".format(package))
+                log.debug(f"{package}: already built.")
                 continue
             if not is_task_active_or_reserved_or_scheduled(package):
                 rebuild.delay(package)
             else:
-                log.debug("{}: already submitted.".format(package))
+                log.debug(f"{package}: already submitted.")
     except (RebuilderExceptionGet, pymongo.errors.ServerSelectionTimeoutError) as e:
         log.error(str(e))
         status = False
@@ -110,12 +112,13 @@ def rebuild(package):
     status = True
     # TODO: improve serialize/deserialize Package
     try:
-        package = BuildPackage.fromdict(package)
+        package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild(str(e))
-    builder = Rebuilder(package=package, snapshot_query_url=Config['snapshot'],
-                        sign_keyid=Config['sign_keyid'])
+    builder = getRebuilder(package=package,
+                           snapshot_query_url=Config['snapshot'],
+                           sign_keyid=Config['sign_keyid'])
     metadata = os.path.join(builder.get_output_dir(), 'metadata')
     if not os.path.exists(metadata):
         try:
@@ -123,10 +126,10 @@ def rebuild(package):
         except RebuilderExceptionBuild as e:
             log.error(str(e))
             status = False
+        upload.delay()
+        record.delay(package, status)
     else:
         log.debug("{}: in-toto metadata already exists.".format(package))
-    upload.delay(package, status)
-    record.delay(package, status)
     return status
 
 
@@ -135,7 +138,7 @@ def rebuild(package):
 def record(package, build_status):
     status = True
     try:
-        package = BuildPackage.fromdict(package)
+        package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionRecord(str(e))
@@ -164,29 +167,13 @@ def record(package, build_status):
 
 @app.task(base=RebuilderTask, default_retry_delay=60, max_retries=3,
           autoretry_for=[RebuilderExceptionUpload])
-def upload(package, build_status):
+def upload():
     status = True
-    try:
-        package = BuildPackage.fromdict(package)
-    except KeyError as e:
-        # We should never get here but in case of manual task call
-        log.error("Failed to parse package.")
-        raise RebuilderExceptionUpload(str(e))
     try:
         if Config['ssh_key'] and Config['remote_ssh_host'] and \
                 Config['remote_ssh_basedir']:
-            # TODO: work on refining granularity.
-            # Use code in fepitre/qubes-components-manager
-
             # pay attention to latest "/", we use rsync!
-            if build_status:
-                local_log_dir = "/log-ok/"
-                local_build_dir = "/deb/r{}/{}/".format(
-                    package.release, package.package_set)
-                dir_to_upload = [local_log_dir, local_build_dir]
-            else:
-                local_log_dir = "/log-fail/"
-                dir_to_upload = [local_log_dir]
+            dir_to_upload = ["/rebuild/"]
 
             for local_dir in dir_to_upload:
                 remote_host = Config['remote_ssh_host']
@@ -213,5 +200,5 @@ def upload(package, build_status):
             status = False
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
         log.error(str(e))
-        raise RebuilderExceptionUpload("{}: Failed to upload".format(package))
+        raise RebuilderExceptionUpload("Failed to upload")
     return status

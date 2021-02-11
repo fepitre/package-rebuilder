@@ -52,6 +52,7 @@ sign_keyid = config.get('DEFAULT', 'in-toto-sign-key-fpr')
 ssh_key = config.get('DEFAULT', 'repo-ssh-key')
 remote_ssh_host = config.get('DEFAULT', 'repo-remote-ssh-host')
 remote_ssh_basedir = config.get('DEFAULT', 'repo-remote-ssh-basedir')
+dist = config.get('DEFAULT', 'dist', fallback=[])
 
 Config = {
     'broker': broker,
@@ -62,4 +63,5 @@ Config = {
     'ssh_key': ssh_key,
     'remote_ssh_host': remote_ssh_host,
     'remote_ssh_basedir': remote_ssh_basedir,
+    'dist': dist
 }

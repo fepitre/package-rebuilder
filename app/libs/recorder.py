@@ -137,7 +137,8 @@ class Recorder:
         buildrecord = self.get_buildrecord_with_id(buildrecord_id)
         if buildrecord:
             try:
-                buildrecord = BuildPackage.fromdict(buildrecord)
+                del buildrecord['_id']
+                buildrecord = BuildPackage.from_dict(buildrecord)
             except KeyError as e:
                 raise RebuilderExceptionRecord(str(e))
         return buildrecord

@@ -165,7 +165,7 @@ The APT configuration file `/etc/apt/apt.conf.d/intoto`:
 APT::Intoto {
   LogLevel {"20"};
   Rebuilders {
-    "https://mirror.notset.fr/qubes/rebuild/deb/r4.1/vm/";
+    "https://qubes.notset.fr/rebuild/deb/r4.1/vm/";
   };
   GPGHomedir {"/var/lib/intoto/gnupg"};
   Layout {"/var/lib/intoto/root.layout"};
@@ -308,7 +308,7 @@ and add the `root.layout` file in `/var/lib/intoto` where we provide the one ass
 In this file, GPG fingerprint `8deb0bef1d99feb8b9a90fb192ef6d6141641e5c` corresponds to a rebuilder signing key 
 (notset-rebuilder) and `9fa64b92f95e706bf28e2ca6484010b5cdc576e2` corresponds to the key used to sign the 
 `root.layout` file. In this setup example, you can the keys by using links [9FA64B92F95E706BF28E2CA6484010B5CDC576E2.asc](https://raw.githubusercontent.com/QubesOS/qubes-builder/master/keys/9FA64B92F95E706BF28E2CA6484010B5CDC576E2.asc) 
-and [8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C.asc](https://mirror.notset.fr/qubes/rebuild/8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C.asc).
+and [8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C.asc](https://qubes.notset.fr/rebuild/8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C.asc).
 Once you have keys locally and verified them:
 ```
 $ GNUPGHOME=/var/lib/intoto/gnupg gpg --import 9FA64B92F95E706BF28E2CA6484010B5CDC576E2.asc 8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C.asc
