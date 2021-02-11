@@ -20,7 +20,7 @@
 
 import logging
 
-log = logging.getLogger('QubesRebuilder')
+log = logging.getLogger('PackageRebuilder')
 log.setLevel(logging.DEBUG)
 
 formatter = logging.Formatter(

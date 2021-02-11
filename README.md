@@ -1,9 +1,9 @@
-QubesRebuilder
+PackageRebuilder
 ===
 
 ## Architecture
 
-The current design of `QubesRebuilder` is based on individual tasks orchestrated with the help of `celery` engine
+The current design of `PackageRebuilder` is based on individual tasks orchestrated with the help of `celery` engine
 (see https://docs.celeryproject.org/en/stable/). `celery` uses a `broker` to receive and distribute task in specific queues for
 which services `getter`, `rebuilder`, `recorder` and `uploader` are connected to.
 
@@ -45,9 +45,9 @@ requests made by rebuild tools.
 
 In all the provided services, the only scalable one here is the `rebuilder`.
 
-## QubesRebuilder: the machinery 
+## PackageRebuilder: the machinery
 
-This sections helps to configure a Qubes Rebuilder on any environment (not Qubes specific) assuming it satisfies
+This sections helps to configure a `PackageRebuilder` on any environment (not Qubes specific) assuming it satisfies
 the following dependencies requirements. The current setup is done using `Docker` for which it can be replaced using
 a more classic or Qubes configuration with virtual machines for each service. This will be detailed in a near future.
 The use of `celery` allows extending and interacting with the `broker` easily. For example, one can add webhook trigger
@@ -57,7 +57,7 @@ with or in place of periodic scheduling.
 
 ### Installation
 
-We recommend installing `QubesRebuilder` in a Debian or CentOS based distribution which still supports `Docker`.
+We recommend installing `PackageRebuilder` in a Debian or CentOS based distribution which still supports `Docker`.
 In a future, we plan to test it with `podman`. Here we give installation steps for a Debian distribution.
 
 On the hosting machine, most of the commands as to be run as `root`.
@@ -73,9 +73,9 @@ $ systemctl enable docker
 $ systemctl start docker
 ```
 
-Clone `qubes-rebuilder` repository into `/opt` as `rebuilder`: 
+Clone `package-rebuilder` repository into `/opt` as `rebuilder`:
 ```
-$ git clone https://github.com/fepitre/qubes-rebuilder /opt/rebuilder
+$ git clone https://github.com/fepitre/package-rebuilder /opt/rebuilder
 ```
 
 Copy rebuilder `systemd` service and reload:
@@ -355,4 +355,4 @@ for GPG operations and now supports passing `GNUPG` gpg client to use. By defaul
 Please note that if `expiration` is not given in original `root.layout` before signing process then, it uses one 
 month as default expiration time. Also, pay attention that we have provided currently only one rebuilder 
 in `/etc/apt/apt.conf.d/intoto` for which we can only set `threshold` to `1` in `root.layout`. 
-See upstream documentation about that. 
+See upstream documentation about that.

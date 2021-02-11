@@ -22,7 +22,7 @@ import celery
 from app.config.config import Config
 from app.libs.logger import log
 
-app = celery.Celery('QubesRebuilder')
+app = celery.Celery('PackageRebuilder')
 
 celery_app_conf = {
     'broker_url': Config['broker'],

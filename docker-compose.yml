@@ -22,7 +22,7 @@ services:
       - '/var/lib/rebuilder/broker/data:/var/lib/rabbitmq'
       - '/var/lib/rebuilder/broker/log:/var/log/rabbitmq'
 
-### QubesRebuilder
+### PackageRebuilder
 
   snapshot:
     build:
