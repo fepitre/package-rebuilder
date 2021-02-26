@@ -90,7 +90,7 @@ $ systemctl daemon-reload
 
 Create the following folders:
 ```
-$ mkdir -p /var/lib/rebuilder/{deb,yum,broker,db,ssh,gnupg,log-ok,log-fail}
+$ mkdir -p /var/lib/rebuilder/{rebuild,broker,db,ssh,gnupg}
 ```
 
 The previously created folders are mounted differently into containers to store or share persistent data
@@ -312,7 +312,7 @@ $ GNUPGHOME=/var/lib/intoto/gnupg gpg --import 9FA64B92F95E706BF28E2CA6484010B5C
 
 ### Enable the transport
 
-You need to enable `in-toto` transport for Qubes repositories. In `/etc/apt/sources.list.d/qubes-r4.list` you need
+You need to enable `in-toto` transport for Qubes and Debian repositories. In `/etc/apt/sources.list.d/qubes-r4.list` you need
 to replace `https` by `intoto`. So up to commented entries, you should have:
 ```
 # Main qubes updates repository
@@ -322,7 +322,16 @@ deb [arch=amd64] intoto://deb.qubes-os.org/r4.1/vm bullseye main
 deb [arch=amd64] intoto://deb.qubes-os.org/r4.1/vm bullseye-testing main
 ```
 
-### DYO `root.layout`
+Doing the same for Debian, in `/etc/apt/sources.list` you obtain for a selected mirror:
+```
+deb intoto://ftp.fr.debian.org/debian bullseye main contrib non-free
+deb intoto://ftp.fr.debian.org/debian-security bullseye-security main contrib non-free
+```
+
+Please note that there is currently an issue in replacing `intoto` for `https` mirrors only
+(see https://github.com/in-toto/apt-transport-in-toto/issues/34). Ensure to have a supported `http` mirror selected.
+
+### DYI `root.layout`
 If doing on your own the `root.layout` file, `signatures` section and `keys` are empty. Before signing the
 whole file, you need to provide `keys` sections. For that you can use the following command:
 ```
