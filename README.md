@@ -181,7 +181,7 @@ has to verify the metadata with respect to received metadata.
 Create the following directory:
 ```
 $ mkdir -p /var/lib/intoto/gnupg
-$ chmod 600 /var/lib/intoto/gnupg
+$ chmod 700 /var/lib/intoto/gnupg
 ```
 
 and add the `root.layout` file in `/var/lib/intoto` where we provide the one associated for `notset-rebuilder`:
