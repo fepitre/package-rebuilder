@@ -150,8 +150,11 @@ class DebianRepository:
                 continue
             if not packages.get(parsed_bn['name'], []):
                 packages[parsed_bn['name']] = []
+            # WIP: Ignore buildinfo having e.g. amd64-source?
+            if len(parsed_bn['arch']) > 1:
+                continue
             arch = DEBIAN_ARCHES.get(arch, arch)
-            if not set(parsed_bn['arch']).intersection(("all", arch)):
+            if parsed_bn['arch'][0] != arch:
                 continue
             rebuild = BuildPackage(
                 name=parsed_bn['name'],
@@ -247,8 +250,10 @@ class QubesRepository:
                 parsed_bn = parse_deb_buildinfo_fname(f)
                 if not parsed_bn:
                     continue
+                if len(parsed_bn['arch']) > 1:
+                    continue
                 arch = DEBIAN_ARCHES.get(arch, arch)
-                if not set(parsed_bn['arch']).intersection(("all", arch)):
+                if parsed_bn['arch'][0] != arch:
                     continue
                 if '+deb{}u'.format(DEBIAN.get(self.dist)) not in \
                         parsed_bn['version']:

@@ -92,6 +92,7 @@ class DebianRebuilder(BaseRebuilder):
         )
 
     def debrebuild(self, tempdir):
+        # WIP: use internal Rebuilder class instead of wrapping through shell
         build_cmd = [
             "python3",
             "/opt/debrebuild/debrebuild.py",
