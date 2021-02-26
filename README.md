@@ -31,8 +31,8 @@ The chosen `broker` here for `celery` is `RabbitMQ`. Each service is doing only 
 | uploader | upload |
 | recorder | record |
 
-The `getter` service is responsible to get the latest `buildinfo` on `QubesOS` repositories and to add new 
-`rebuild` tasks. Once a `rebuilder` has finished a `rebuild` task, on success, it adds a new `upload` task for
+The `getter` service is responsible to get the latest `buildinfo` on `Qubes OS` or `Debian` (soon `Fedora`) repositories
+and to add new `rebuild` tasks. Once a `rebuilder` has finished a `rebuild` task, on success, it adds a new `upload` task for
 `uploader`. Either on success or failure, a build record containing useful information about the build is 
 created with a `record` task. Notably, a build record contains all the information about a build, its status and 
 the number of retries. All build records are stored into a `Mongo` database provided by `db` service which is
@@ -144,18 +144,9 @@ options, we refer to upstream projects https://in-toto.readthedocs.io and https:
 
 ### Installation
 
-> WARNING: As `apt-transport-in-toto` is not yet in official Debian repositories, installation requires
-> to get [intoto.py](https://raw.githubusercontent.com/in-toto/apt-transport-in-toto/debian/intoto.py). Here is the shasum:
-> 6bda5bd306f8fe505616b913c433790934b63ab533f5fb7643144f89a4993ec28d960a186a2e839138a013eee69f38b4d299d89506b690673122fbcbe0e369f7  intoto.py
-
 For dependencies, you need to install:
 ```
-$ apt install in-toto python3-securesystemslib python3-pathspec python3-iso8601 python3-cryptography
-```
-
-Once you get the `intoto.py` file, place it as `/usr/lib/apt/methods/intoto` (remove `.py` extension) and
-```
-$ chmod 755 /usr/lib/apt/methods/intoto
+$ apt install apt-transport-in-toto in-toto python3-securesystemslib python3-pathspec python3-iso8601 python3-cryptography
 ```
 
 ### Configure `apt-transport-in-toto`
@@ -165,6 +156,7 @@ The APT configuration file `/etc/apt/apt.conf.d/intoto`:
 APT::Intoto {
   LogLevel {"20"};
   Rebuilders {
+    "https://debian.notset.fr/rebuild/";
     "https://qubes.notset.fr/rebuild/deb/r4.1/vm/";
   };
   GPGHomedir {"/var/lib/intoto/gnupg"};
