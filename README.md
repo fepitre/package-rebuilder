@@ -1,6 +1,10 @@
 PackageRebuilder
 ===
 
+Note: This software is in a very active development and is subject to major changes due to in progress work
+on Qubes, Debian and Fedora side and also dependent tools `debrebuild` and `rpmreproduce`. It may not work as
+expected until a proper stable release is made. For more information, don't hesitate to contact me.
+
 ## Architecture
 
 The current design of `PackageRebuilder` is based on individual tasks orchestrated with the help of `celery` engine
