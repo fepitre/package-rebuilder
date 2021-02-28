@@ -126,8 +126,8 @@ def rebuild(package):
         except RebuilderExceptionBuild as e:
             log.error(str(e))
             status = False
-        upload.delay()
         record.delay(package, status)
+        upload.delay()
     else:
         log.debug("{}: in-toto metadata already exists.".format(package))
     return status

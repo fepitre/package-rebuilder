@@ -19,4 +19,5 @@ def is_fedora(dist):
 
 
 def is_debian(dist):
+    dist, package_sets = "{}+".format(dist).split('+', 1)
     return DEBIAN.get(dist, None) is not None

@@ -8,7 +8,7 @@ get.delay("qubes-4.1-vm-bullseye", "x86_64")
 
 print("Trigger bullseye...")
 # "x86_64" is aliased to "amd64"
-get.delay("bullseye", "all")
-get.delay("bullseye", "x86_64")
+get.delay("bullseye+essential+required+build-essential+build-essential-depends", "all")
+get.delay("bullseye+essential+required+build-essential+build-essential-depends", "x86_64")
 
 print("Done!")

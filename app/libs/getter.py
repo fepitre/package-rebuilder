@@ -68,6 +68,7 @@ def getRepository(dist):
     # qubes-4.1-vm-bullseye
     # qubes-4.1-vm-fc32
     # sid
+    # bullseye+essential+build_essential
     # fedora-33
     if is_qubes(dist):
         repo = QubesRepository(dist)
@@ -110,7 +111,9 @@ class FedoraRepository:
 
 class DebianRepository:
     def __init__(self, dist):
-        self.dist = dist
+        self.dist, package_sets = "{}+".format(dist).split('+', 1)
+        self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
+                             if pkg_set]
         try:
             if is_debian(self.dist):
                 if not debian:
@@ -122,29 +125,36 @@ class DebianRepository:
         except (ValueError, FileNotFoundError) as e:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
 
-    def get_buildinfos(self):
+    def get_buildinfos(self, arch):
         files = []
-        resp = requests.get("https://buildinfos.debian.net/buildinfo-pool.list")
+        url = f"https://buildinfos.debian.net/buildinfo-pool_{self.dist}_{arch}.list"
+        resp = requests.get(url)
         if not resp.ok:
             return files
-        content = resp.text.split('\n')
+        buildinfo_pool = resp.text.rstrip('\n').split('\n')
 
-        # WIP: for testing purposed only
-        essential = "base-files base-passwd bash coreutils dash debianutils diffutils dpkg findutils glibc grep gzip hostname init-system-helpers ncurses perl sed shadow sysvinit tar util-linux"
-        required = "apt base-files base-passwd bash coreutils dash debconf debianutils diffutils dpkg e2fsprogs findutils gcc-10 gcc-9 glibc grep gzip hostname init-system-helpers mawk ncurses pam perl sed shadow sysvinit tar tzdata util-linux"
-        build_essential = "acl attr audit base-files base-passwd bash binutils build-essential bzip2 cdebconf coreutils dash db5.3 debconf debianutils diffutils dpkg e2fsprogs elogind findutils gawk gcc-10 gcc-defaults gdbm glibc gmp grep gzip hostname init-system-helpers isl keyutils krb5 libcap2 libcap-ng libnsl libselinux libsigsegv libtirpc libxcrypt libzstd linux lsb make-dfsg mpclib3 mpfr4 ncurses openssl pam patch pcre2 pcre3 perl readline sed shadow systemd sysvinit tar util-linux xz-utils zlib"
-
-        packages = set(essential.split() + required.split() + build_essential.split())
-        for buildinfo in content:
-            if not buildinfo.split('/')[-1].split('_')[0] in packages:
+        filtered_packages = []
+        for pkgset_name in self.package_sets:
+            url = f"https://jenkins.debian.net/userContent/reproducible/" \
+                  f"debian/pkg-sets/{self.dist}/{pkgset_name}.pkgset"
+            resp = requests.get(url)
+            if not resp.ok:
                 continue
-            files.append(
-                "https://buildinfos.debian.net{}".format(buildinfo.strip()))
+            content = resp.text.rstrip('\n').split('\n')
+            filtered_packages += content
+        filtered_packages = set(sorted(filtered_packages))
+
+        for buildinfo in buildinfo_pool:
+            if filtered_packages and buildinfo.split('/')[-1].split('_')[0] \
+                    not in filtered_packages:
+                continue
+            files.append(f"https://buildinfos.debian.net{buildinfo}")
         return files
 
     def get_buildpackages(self, arch):
         packages = {}
-        for f in self.get_buildinfos():
+        arch = DEBIAN_ARCHES.get(arch, arch)
+        for f in self.get_buildinfos(arch):
             parsed_bn = parse_deb_buildinfo_fname(f)
             if not parsed_bn:
                 continue
@@ -153,7 +163,6 @@ class DebianRepository:
             # WIP: Ignore buildinfo having e.g. amd64-source?
             if len(parsed_bn['arch']) > 1:
                 continue
-            arch = DEBIAN_ARCHES.get(arch, arch)
             if parsed_bn['arch'][0] != arch:
                 continue
             rebuild = BuildPackage(
