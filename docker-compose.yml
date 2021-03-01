@@ -13,6 +13,7 @@ services:
 ### Celery
 
   broker:
+    restart: always
 # 'docker.io/rabbitmq:3-management'
     image: 'docker.io/rabbitmq@sha256:2b88e8f43d230e2a786ebb2bcdfb0ebffbc77806698e4293f8500ed7c94ec1cf'
     ports:
@@ -25,6 +26,7 @@ services:
 ### PackageRebuilder
 
   snapshot:
+    restart: always
     build:
       context: .
       dockerfile: snapshot.Dockerfile
@@ -32,6 +34,7 @@ services:
       - '5000:5000'
 
   db:
+    restart: always
 # 'docker.io/mongo'
     image: 'docker.io/mongo@sha256:06ba42906e0346c15a795ff6ebcb3ac88be0f85aa899a6225979029188e312c6'
     ports:
@@ -41,6 +44,7 @@ services:
     command: --quiet
 
   getter:
+    restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
@@ -57,6 +61,7 @@ services:
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
 
   rebuilder:
+    restart: always
     privileged: true
     build:
       context: .
@@ -82,6 +87,7 @@ services:
 #      replicas: 2
 
   recorder:
+    restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
@@ -97,6 +103,7 @@ services:
     entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=record
 
   uploader:
+    restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
