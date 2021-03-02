@@ -322,7 +322,7 @@ deb [arch=amd64] intoto://deb.qubes-os.org/r4.1/vm bullseye main
 deb [arch=amd64] intoto://deb.qubes-os.org/r4.1/vm bullseye-testing main
 ```
 
-### DYI `root.layout`
+### DYO `root.layout`
 If doing on your own the `root.layout` file, `signatures` section and `keys` are empty. Before signing the
 whole file, you need to provide `keys` sections. For that you can use the following command:
 ```
