@@ -84,9 +84,13 @@ class DebianRebuilder(BaseRebuilder):
             'snapshot_query_url', 'http://snapshot.debian.org')
         self.extra_build_args = None
 
-    def get_output_dir(self):
-        return '{}/sources/{}/{}'.format(
+    def get_output_dir(self, unreproducible=False):
+        sources = 'sources'
+        if unreproducible:
+            sources = 'unreproducible/sources'
+        return '{}/{}/{}/{}'.format(
             self.basedir,
+            sources,
             self.package.name,
             self.package.version
         )
@@ -101,7 +105,6 @@ class DebianRebuilder(BaseRebuilder):
             "--builder=mmdebstrap",
             "--output={}".format(tempdir),
             "--query-url={}".format(self.snapshot_query_url),
-            "--no-checksums-verification",
         ]
         if self.sign_keyid:
             build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
@@ -116,12 +119,15 @@ class DebianRebuilder(BaseRebuilder):
         return result, build_cmd
 
     def run(self):
+        outputdir = None
         try:
             tempdir = self.gen_temp_dir()
             result, build_cmd = self.debrebuild(tempdir)
 
             if result.returncode == 0:
                 self.logfile = f'{self.basedir}/log-ok/{self.logfile}'
+            elif result.returncode == 2:
+                self.logfile = f'{self.basedir}/log-ok-unreproducible/{self.logfile}'
             else:
                 self.logfile = f'{self.basedir}/log-fail/{self.logfile}'
 
@@ -129,7 +135,7 @@ class DebianRebuilder(BaseRebuilder):
             with open(self.logfile, 'wb') as fd:
                 fd.write(result.stdout)
 
-            if result.returncode != 0:
+            if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(
                     result.returncode, build_cmd)
 
@@ -138,14 +144,16 @@ class DebianRebuilder(BaseRebuilder):
             link = glob.glob("rebuild*.link")[0]
 
             # create final output directory
-            os.makedirs(self.get_output_dir(), exist_ok=True)
+            outputdir = self.get_output_dir(
+                unreproducible=result.returncode == 2)
+            os.makedirs(outputdir, exist_ok=True)
             shutil.copy2(
-                os.path.join(tempdir, buildinfo), self.get_output_dir())
-            shutil.copy2(os.path.join(tempdir, link), self.get_output_dir())
+                os.path.join(tempdir, buildinfo), outputdir)
+            shutil.copy2(os.path.join(tempdir, link), outputdir)
             shutil.rmtree(tempdir)
 
             # create symlink to new buildinfo and rebuild link file
-            os.chdir(self.get_output_dir())
+            os.chdir(outputdir)
             if buildinfo:
                 os.symlink(buildinfo, "buildinfo")
             os.symlink(link, "metadata")
@@ -153,15 +161,15 @@ class DebianRebuilder(BaseRebuilder):
             with open(buildinfo) as fd:
                 parsed_buildinfo = debian.deb822.BuildInfo(fd)
 
-            os.chdir(os.path.join(self.get_output_dir(), '../../'))
+            os.chdir(os.path.join(outputdir, '../../'))
             for binpkg in parsed_buildinfo.get_binary():
                 if not os.path.exists(binpkg):
                     os.symlink(self.package.name, binpkg)
 
         except (subprocess.CalledProcessError, FileNotFoundError,
                 FileExistsError, IndexError, OSError) as e:
-            if os.path.exists(self.get_output_dir()):
-                shutil.rmtree(self.get_output_dir())
+            if outputdir and os.path.exists(outputdir):
+                shutil.rmtree(outputdir)
             raise RebuilderExceptionBuild(
                 "Failed to build {}: {}".format(self.package.url, str(e)))
 

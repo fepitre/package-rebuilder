@@ -120,7 +120,9 @@ def rebuild(package):
                            snapshot_query_url=Config['snapshot'],
                            sign_keyid=Config['sign_keyid'])
     metadata = os.path.join(builder.get_output_dir(), 'metadata')
-    if not os.path.exists(metadata):
+    metadata_unrepr = os.path.join(
+        builder.get_output_dir(unreproducible=True), 'metadata')
+    if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
         try:
             builder.run()
         except RebuilderExceptionBuild as e:
