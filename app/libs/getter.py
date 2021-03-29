@@ -34,7 +34,7 @@ except ImportError:
 
 from packaging.version import parse as parse_version
 from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora
-from app.libs.exceptions import RebuilderExceptionGet
+from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
 
 
 def parse_rpm_buildinfo_fname(buildinfo):
@@ -64,21 +64,34 @@ def parse_deb_buildinfo_fname(buildinfo):
     return parsed_bn
 
 
-def getRepository(dist):
-    # qubes-4.1-vm-bullseye
-    # qubes-4.1-vm-fc32
-    # sid
-    # bullseye+essential+build_essential
-    # fedora-33
-    if is_qubes(dist):
-        repo = QubesRepository(dist)
-    elif is_fedora(dist):
-        repo = FedoraRepository(dist)
-    elif is_debian(dist):
-        repo = DebianRepository(dist)
-    else:
-        raise RebuilderExceptionGet("Unsupported distribution: {}".format(dist))
-    return repo
+class RebuilderDist:
+    def __init__(self, dist):
+        try:
+            # qubes-4.1-vm-bullseye.amd64
+            # qubes-4.1-vm-fc32.noarch
+            # sid.all
+            # bullseye+essential+build_essential.all
+            # fedora-33.amd64
+            self.name, self.arch = dist.rsplit('.', 1)
+        except ValueError:
+            raise RebuilderExceptionDist(f"Cannot parse dist: {dist}.")
+
+        if is_qubes(dist):
+            self.repo = QubesRepository(self.name)
+            self.package_sets = ["full"]
+            self.distribution = "qubes"
+        elif is_fedora(dist):
+            self.repo = FedoraRepository(self.name)
+            self.package_sets = []
+            self.distribution = "fedora"
+        elif is_debian(dist):
+            self.name, package_sets = "{}+".format(self.name).split('+', 1)
+            self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
+                                 if pkg_set]
+            self.distribution = "debian"
+            self.repo = DebianRepository(self.name, self.package_sets)
+        else:
+            raise RebuilderExceptionDist(f"Unsupported distribution: {dist}")
 
 
 class BuildPackage(dict):
@@ -110,10 +123,9 @@ class FedoraRepository:
 
 
 class DebianRepository:
-    def __init__(self, dist):
-        self.dist, package_sets = "{}+".format(dist).split('+', 1)
-        self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
-                             if pkg_set]
+    def __init__(self, dist, package_sets):
+        self.dist = dist
+        self.package_sets = package_sets
         try:
             if is_debian(self.dist):
                 if not debian:

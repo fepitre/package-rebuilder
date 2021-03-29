@@ -22,27 +22,22 @@ import celery
 import pymongo
 import subprocess
 import os
+import requests
 
 from app.celery import app
 from app.libs.logger import log
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, \
-    RebuilderExceptionRecord
-from app.libs.getter import getRepository, BuildPackage
+    RebuilderExceptionRecord, RebuilderException, \
+    RebuilderExceptionDist
+from app.libs.getter import BuildPackage, RebuilderDist
 from app.libs.rebuilder import getRebuilder
 from app.libs.recorder import Recorder
 
 
 class RebuilderTask(celery.Task):
-
-    def on_failure(self, exc, task_id, args, kwargs, einfo):
-        if self.max_retries == self.request.retries:
-            debug_msg = 'max_retries'
-        else:
-            debug_msg = exc
-
-        # fail.delay(args=args, debug=debug_msg)
+    pass
 
 
 def is_task_active_or_reserved_or_scheduled(args):
@@ -66,19 +61,97 @@ def is_task_active_or_reserved_or_scheduled(args):
     return dict(args) in tasks_args
 
 
+@app.task(base=RebuilderTask)
+def state():
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from packaging.version import parse as parse_version
+
+    def func(pct, allvals):
+        absolute = round(pct / 100. * np.sum(allvals))
+        return "{:.1f}%\n({:d})".format(pct, absolute)
+
+    try:
+        db = Recorder(Config['mongodb'])
+        data = [x for x in db.dump_buildrecord()]
+        for dist in Config['dist'].split():
+            dist = RebuilderDist(dist)
+            data_dist = [x for x in data
+                         if x['dist'] == dist.name and x['arch'] == dist.arch]
+            data_ordered = {}
+            for x in data_dist:
+                if data_ordered.get(x["name"], None):
+                    if parse_version(x["version"]) <= parse_version(
+                            data_ordered[x["name"]]["version"]):
+                        continue
+                data_ordered[x["name"]] = x
+
+            for pkgset_name in dist.package_sets:
+                if dist.distribution == "debian":
+                    url = f"https://jenkins.debian.net/userContent/reproducible/" \
+                          f"debian/pkg-sets/{dist.name}/{pkgset_name}.pkgset"
+                    resp = requests.get(url)
+                    if not resp.ok:
+                        continue
+                    content = resp.text.rstrip('\n').split('\n')
+                else:
+                    content = data_ordered.keys()
+
+                result = {"repro": [], "unrepro": [], "pending": []}
+                for x in data_ordered.values():
+                    if x["name"] in content:
+                        if x["status"] == "success":
+                            result["repro"].append(x)
+                        elif x["status"] == "fail":
+                            result["unrepro"].append(x)
+                        else:
+                            result["pending"].append(x)
+
+                x = []
+                legends = []
+                explode = []
+                colors = []
+                if result["repro"]:
+                    count = len(result["repro"])
+                    x.append(count)
+                    legends.append(f"Reproducible")
+                    colors.append("green")
+                    explode.append(0)
+                if result["unrepro"]:
+                    count = len(result["unrepro"])
+                    x.append(count)
+                    legends.append(f"Unreproducible")
+                    colors.append("red")
+                    explode.append(0.15)
+                if result["pending"]:
+                    count = len(result["pending"])
+                    x.append(count)
+                    legends.append(f"Pending")
+                    colors.append("orange")
+                    explode.append(0)
+
+                fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
+                wedges, texts, autotexts = ax.pie(x, colors=colors, explode=explode, autopct=lambda pct: func(pct, x), shadow=True, startangle=90, normalize=True)
+                ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+                ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
+                fig.savefig(f"/rebuild/{dist.distribution}/{dist.name}_{pkgset_name}.{dist.arch}.png")
+    except (pymongo.errors.ServerSelectionTimeoutError, RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
+        raise RebuilderException("{}: failed to generate status.".format(str(e)))
+
+
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
     schedule = Config['schedule']
     for dist in Config['dist'].split():
-        sender.add_periodic_task(schedule, get.s(dist, "x86_64"), name=dist)
+        sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
 
 @app.task(base=RebuilderTask)
-def get(dist, arch):
+def get(dist):
     status = True
-    repo = getRepository(dist)
     try:
-        packages = repo.get_buildpackages(arch)
+        dist = RebuilderDist(dist)
+        packages = dist.repo.get_buildpackages(dist.arch)
         db = Recorder(Config['mongodb'])
         for name in packages.keys():
             if not packages[name]:
@@ -101,6 +174,9 @@ def get(dist, arch):
                 rebuild.delay(package)
             else:
                 log.debug(f"{package}: already submitted.")
+    except RebuilderExceptionDist:
+        log.error(f"Cannot parse dist: {dist}.")
+        status = False
     except (RebuilderExceptionGet, pymongo.errors.ServerSelectionTimeoutError) as e:
         log.error(str(e))
         status = False
@@ -163,7 +239,7 @@ def record(package, build_status):
                     buildrecord)
     except pymongo.errors.ServerSelectionTimeoutError as e:
         raise RebuilderExceptionRecord("{}: failed to save.".format(str(e)))
-
+    #state.delay()
     return status
 
 

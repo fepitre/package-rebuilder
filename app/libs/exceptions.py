@@ -23,6 +23,10 @@ class RebuilderException(Exception):
     pass
 
 
+class RebuilderExceptionDist(RebuilderException):
+    pass
+
+
 class RebuilderExceptionGet(RebuilderException):
     pass
 

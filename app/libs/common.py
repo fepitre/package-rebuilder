@@ -7,6 +7,7 @@ DEBIAN = {
 
 DEBIAN_ARCHES = {
     "x86_64": "amd64",
+    "noarch": "all"
 }
 
 
