@@ -82,6 +82,8 @@ class DebianRebuilder(BaseRebuilder):
         self.basedir = "/rebuild/debian"
         self.snapshot_query_url = kwargs.get(
             'snapshot_query_url', 'http://snapshot.debian.org')
+        self.snapshot_mirror = kwargs.get(
+            'snapshot_mirror', "http://debian.notset.fr/snapshot")
         self.extra_build_args = None
 
     def get_output_dir(self, unreproducible=False):
@@ -105,6 +107,7 @@ class DebianRebuilder(BaseRebuilder):
             "--builder=mmdebstrap",
             "--output={}".format(tempdir),
             "--query-url={}".format(self.snapshot_query_url),
+            "--snapshot-mirror={}".format(self.snapshot_mirror)
         ]
         if self.sign_keyid:
             build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
