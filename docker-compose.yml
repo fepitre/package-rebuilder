@@ -117,3 +117,17 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
+
+  state:
+    restart: always
+    image: 'rebuilder_base'
+    volumes:
+      - .:/app
+      - '/var/lib/rebuilder/rebuild:/rebuild'
+    depends_on:
+      - broker
+    links:
+      - broker
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+    entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=state

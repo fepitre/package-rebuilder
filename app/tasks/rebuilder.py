@@ -249,7 +249,7 @@ def record(package, build_status):
                 status = db.update_buildrecord(buildrecord)
     except pymongo.errors.ServerSelectionTimeoutError as e:
         raise RebuilderExceptionRecord("{}: failed to save.".format(str(e)))
-    #state.delay()
+    state.delay()
     return status
 
 
