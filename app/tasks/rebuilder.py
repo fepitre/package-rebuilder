@@ -97,13 +97,15 @@ def state():
                 else:
                     content = data_ordered.keys()
 
-                result = {"repro": [], "unrepro": [], "pending": []}
+                result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
                 for x in data_ordered.values():
                     if x["name"] in content:
-                        if x["status"] == "success":
+                        if x["status"] == "reproducible":
                             result["repro"].append(x)
-                        elif x["status"] == "fail":
+                        elif x["status"] == "unreproducible":
                             result["unrepro"].append(x)
+                        elif x["status"] == "fail":
+                            result["fail"].append(x)
                         else:
                             result["pending"].append(x)
 
@@ -121,13 +123,19 @@ def state():
                     count = len(result["unrepro"])
                     x.append(count)
                     legends.append(f"Unreproducible")
+                    colors.append("orange")
+                    explode.append(0)
+                if result["fail"]:
+                    count = len(result["fail"])
+                    x.append(count)
+                    legends.append(f"Failed")
                     colors.append("red")
-                    explode.append(0.15)
+                    explode.append(0)
                 if result["pending"]:
                     count = len(result["pending"])
                     x.append(count)
                     legends.append(f"Pending")
-                    colors.append("orange")
+                    colors.append("grey")
                     explode.append(0)
 
                 fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
@@ -135,6 +143,7 @@ def state():
                 ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
                 fig.savefig(f"/rebuild/{dist.distribution}/{dist.name}_{pkgset_name}.{dist.arch}.png")
+        upload.delay()
     except (pymongo.errors.ServerSelectionTimeoutError, RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
         raise RebuilderException("{}: failed to generate status.".format(str(e)))
 
@@ -167,7 +176,7 @@ def get(dist):
             if buildrecord and buildrecord['retry'] == 3:
                 log.error(f"{package}: max retry reached.")
                 continue
-            if buildrecord and buildrecord['status'] == "success":
+            if buildrecord and buildrecord['status'] in ("reproducible", "unreproducible"):
                 log.debug(f"{package}: already built.")
                 continue
             if not is_task_active_or_reserved_or_scheduled(package):
@@ -185,7 +194,7 @@ def get(dist):
 
 @app.task(base=RebuilderTask)
 def rebuild(package):
-    status = True
+    status = "fail"
     # TODO: improve serialize/deserialize Package
     try:
         package = BuildPackage.from_dict(package)
@@ -200,12 +209,15 @@ def rebuild(package):
         builder.get_output_dir(unreproducible=True), 'metadata')
     if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
         try:
-            builder.run()
+            status = builder.run()
         except RebuilderExceptionBuild as e:
             log.error(str(e))
-            status = False
         upload.delay()
     else:
+        if metadata:
+            status = "reproducible"
+        elif metadata_unrepr:
+            status = "unreproducible"
         log.debug("{}: in-toto metadata already exists.".format(package))
     record.delay(package, status)
     return status
@@ -225,8 +237,7 @@ def record(package, build_status):
         buildrecord = db.get_buildrecord(package)
         if not buildrecord:
             log.debug("{}: new buildrecord.".format(package))
-            if build_status:
-                package.status = "success"
+            package.status = build_status
             status = db.insert_buildrecord(package)
         else:
             if not build_status:
@@ -235,8 +246,7 @@ def record(package, build_status):
                 else:
                     log.debug("{}: retry.".format(package))
                     buildrecord.retry += 1
-                status = db.update_buildrecord(
-                    buildrecord)
+                status = db.update_buildrecord(buildrecord)
     except pymongo.errors.ServerSelectionTimeoutError as e:
         raise RebuilderExceptionRecord("{}: failed to save.".format(str(e)))
     #state.delay()
