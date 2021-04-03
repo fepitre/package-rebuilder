@@ -93,6 +93,10 @@ class RebuilderDist:
         else:
             raise RebuilderExceptionDist(f"Unsupported distribution: {dist}")
 
+    def __repr__(self):
+        result = f'{self.name}.{self.arch}'
+        return result
+
 
 class BuildPackage(dict):
     def __init__(self, name, epoch, version, arch, dist, url,

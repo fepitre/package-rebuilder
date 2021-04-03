@@ -161,10 +161,12 @@ def get(dist):
     try:
         dist = RebuilderDist(dist)
         packages = dist.repo.get_buildpackages(dist.arch)
+        if not packages:
+            log.debug(f"No packages found for {dist}")
         db = Recorder(Config['mongodb'])
         for name in packages.keys():
             if not packages[name]:
-                # log.error(f"Nothing to build for package {name} ({dist})")
+                log.debug(f"Nothing to build for package {name} ({dist})")
                 continue
             package = packages[name][0]
             # We have implemented a retry information to prevent useless retry
