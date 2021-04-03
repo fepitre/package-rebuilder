@@ -23,6 +23,20 @@ services:
       - '/var/lib/rebuilder/broker/data:/var/lib/rabbitmq'
       - '/var/lib/rebuilder/broker/log:/var/log/rabbitmq'
 
+  beat:
+    restart: always
+    image: 'rebuilder_base'
+    volumes:
+      - .:/app
+    depends_on:
+      - broker
+    links:
+      - broker
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+# https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
+    entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
+
 ### PackageRebuilder
 
   snapshot:
@@ -58,7 +72,7 @@ services:
       - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
       - MONGO_URL=mongodb://db:27017
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
-    entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
+    entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
 
   rebuilder:
     restart: always
