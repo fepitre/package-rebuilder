@@ -10,4 +10,8 @@ print("Trigger bullseye...")
 get.delay("bullseye+essential+required+build-essential.all")
 get.delay("bullseye+essential+required+build-essential.amd64")
 
+print("Trigger unstable...")
+get.delay("unstable+essential+required+build-essential.all")
+get.delay("unstable+essential+required+build-essential.amd64")
+
 print("Done!")

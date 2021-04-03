@@ -2,7 +2,7 @@ DEBIAN = {
     "buster": "10",
     "bullseye": "11",
     "bookworm": "12",
-    "sid": "12"
+    "unstable": ""
 }
 
 DEBIAN_ARCHES = {
