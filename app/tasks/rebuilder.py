@@ -98,16 +98,16 @@ def state():
                     content = data_ordered.keys()
 
                 result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
-                for x in data_ordered.values():
-                    if x["name"] in content:
-                        if x["status"] == "reproducible":
-                            result["repro"].append(x)
-                        elif x["status"] == "unreproducible":
-                            result["unrepro"].append(x)
-                        elif x["status"] == "fail":
-                            result["fail"].append(x)
-                        else:
-                            result["pending"].append(x)
+                for pkg_name in content:
+                    if data_ordered.get(pkg_name, None):
+                        if data_ordered[pkg_name]["status"] == "reproducible":
+                            result["repro"].append(pkg_name)
+                        elif data_ordered[pkg_name]["status"] == "unreproducible":
+                            result["unrepro"].append(pkg_name)
+                        elif data_ordered[pkg_name]["status"] == "fail":
+                            result["fail"].append(pkg_name)
+                    else:
+                        result["pending"].append(pkg_name)
 
                 x = []
                 legends = []

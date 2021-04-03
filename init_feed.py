@@ -7,7 +7,7 @@ get.delay("qubes-4.1-vm-bullseye.all")
 get.delay("qubes-4.1-vm-bullseye.amd64")
 
 print("Trigger bullseye...")
-get.delay("bullseye+essential+required+build-essential+build-essential-depends.all")
-get.delay("bullseye+essential+required+build-essential+build-essential-depends.amd64")
+get.delay("bullseye+essential+required+build-essential.all")
+get.delay("bullseye+essential+required+build-essential.amd64")
 
 print("Done!")
