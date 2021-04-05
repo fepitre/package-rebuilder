@@ -228,7 +228,6 @@ def rebuild(package):
 @app.task(base=RebuilderTask, default_retry_delay=60, max_retries=3,
           autoretry_for=[RebuilderExceptionRecord])
 def record(package, build_status):
-    status = True
     try:
         package = BuildPackage.from_dict(package)
     except KeyError as e:
@@ -242,13 +241,12 @@ def record(package, build_status):
             package.status = build_status
             status = db.insert_buildrecord(package)
         else:
-            if not build_status:
-                if buildrecord.retry >= 3:
-                    log.error("{}: max retries".format(package))
-                else:
-                    log.debug("{}: retry.".format(package))
-                    buildrecord.retry += 1
-                status = db.update_buildrecord(buildrecord)
+            if buildrecord.retry >= 3:
+                log.error("{}: max retries".format(package))
+            else:
+                log.debug("{}: retry.".format(package))
+                buildrecord.retry += 1
+            status = db.update_buildrecord(buildrecord)
     except pymongo.errors.ServerSelectionTimeoutError as e:
         raise RebuilderExceptionRecord("{}: failed to save.".format(str(e)))
     state.delay()
