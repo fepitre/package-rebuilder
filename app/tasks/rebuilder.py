@@ -98,7 +98,9 @@ def state():
                     content = data_ordered.keys()
 
                 result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
-                for pkg_name in content:
+                for pkg_name in data_ordered.keys():
+                    if pkg_name not in content:
+                        continue
                     if data_ordered.get(pkg_name, None):
                         if data_ordered[pkg_name]["status"] == "reproducible":
                             result["repro"].append(pkg_name)
