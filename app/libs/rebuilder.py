@@ -141,6 +141,9 @@ class DebianRebuilder(BaseRebuilder):
             with open(self.logfile, 'wb') as fd:
                 fd.write(result.stdout)
 
+            # This is for recording logfile entry into DB
+            self.package.log = self.logfile
+
             if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(
                     result.returncode, build_cmd)
