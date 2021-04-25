@@ -63,6 +63,7 @@ def is_task_active_or_reserved_or_scheduled(args):
 
 @app.task(base=RebuilderTask)
 def state():
+    import json
     import numpy as np
     import matplotlib.pyplot as plt
     from packaging.version import parse as parse_version
@@ -76,6 +77,9 @@ def state():
         data = [x for x in db.dump_buildrecord()]
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
+            results_path = f"/rebuild/{dist.distribution}/results"
+            os.makedirs(results_path, exist_ok=True)
+
             data_dist = [x for x in data
                          if x['dist'] == dist.name and x['arch'] == dist.arch]
             data_ordered = {}
@@ -144,7 +148,10 @@ def state():
                 wedges, texts, autotexts = ax.pie(x, colors=colors, explode=explode, autopct=lambda pct: func(pct, x), shadow=True, startangle=90, normalize=True)
                 ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
-                fig.savefig(f"/rebuild/{dist.distribution}/{dist.name}_{pkgset_name}.{dist.arch}.png")
+                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png")
+
+                with open(f"{results_path}/{dist}_db.json", "w") as fd:
+                    fd.write(json.dumps(data_ordered, indent=2) + "\n")
         upload.delay()
     except (pymongo.errors.ServerSelectionTimeoutError, RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
         raise RebuilderException("{}: failed to generate status.".format(str(e)))
