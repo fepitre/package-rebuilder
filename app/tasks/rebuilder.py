@@ -214,6 +214,7 @@ def rebuild(package):
         raise RebuilderExceptionBuild(str(e))
     builder = getRebuilder(package=package,
                            snapshot_query_url=Config['snapshot'],
+                           snapshot_mirror=Config['snapshot'],
                            sign_keyid=Config['sign_keyid'])
     metadata = os.path.join(builder.get_output_dir(), 'metadata')
     metadata_unrepr = os.path.join(

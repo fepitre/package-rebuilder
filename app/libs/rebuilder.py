@@ -81,7 +81,7 @@ class DebianRebuilder(BaseRebuilder):
         self.logfile = "debian-{}".format(self.logfile)
         self.basedir = "/rebuild/debian"
         self.snapshot_query_url = kwargs.get(
-            'snapshot_query_url', 'http://snapshot.debian.org')
+            'snapshot_query_url', 'http://debian.notset.fr/snapshot')
         self.snapshot_mirror = kwargs.get(
             'snapshot_mirror', "http://debian.notset.fr/snapshot")
         self.extra_build_args = None

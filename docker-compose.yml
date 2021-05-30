@@ -39,13 +39,13 @@ services:
 
 ### PackageRebuilder
 
-  snapshot:
-    restart: always
-    build:
-      context: .
-      dockerfile: snapshot.Dockerfile
-    ports:
-      - '5000:5000'
+#  snapshot:
+#    restart: always
+#    build:
+#      context: .
+#      dockerfile: snapshot.Dockerfile
+#    ports:
+#      - '5000:5000'
 
   db:
     restart: always
@@ -87,10 +87,8 @@ services:
       - '/var/lib/rebuilder/gnupg:/root/.gnupg'
     depends_on:
       - broker
-      - snapshot
     links:
       - broker
-      - snapshot
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
