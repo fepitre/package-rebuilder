@@ -184,7 +184,7 @@ def get(dist):
             # to network issues. There could be some improvement by storing
             # celery status/result in a mongodb backend directly.
             buildrecord = db.get_buildrecord(package)
-            if buildrecord and buildrecord['retry'] == 3:
+            if buildrecord and buildrecord['retry'] == 2:
                 log.error(f"{package}: max retry reached.")
                 continue
             if buildrecord and buildrecord['status'] in ("reproducible", "unreproducible"):
@@ -251,7 +251,7 @@ def record(package, build_status):
             package.status = build_status
             status = db.insert_buildrecord(package)
         else:
-            if buildrecord.retry >= 3:
+            if buildrecord.retry >= 2:
                 log.error("{}: max retries".format(package))
             else:
                 log.debug("{}: retry.".format(package))
