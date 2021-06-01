@@ -42,7 +42,7 @@ if 'MONGO_URL' in os.environ:
     mongodb = os.environ['MONGO_URL']
 
 snapshot = config.get('DEFAULT', 'snapshot',
-                      fallback='http://snapshot.debian.org')
+                      fallback='http://debian.notset.fr/snapshot')
 
 try:
     schedule = int(config.get('DEFAULT', 'schedule', fallback=DEFAULT_SCHEDULE))
