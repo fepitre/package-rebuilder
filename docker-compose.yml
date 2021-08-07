@@ -37,6 +37,14 @@ services:
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
 
+  flower:
+    image: mher/flower
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - FLOWER_PORT=5556
+    ports:
+      - 5556:5556
+
 ### PackageRebuilder
 
   db:
