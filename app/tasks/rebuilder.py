@@ -235,8 +235,7 @@ def rebuild(package):
     return status
 
 
-@app.task(base=RebuilderTask, default_retry_delay=60, max_retries=3,
-          autoretry_for=[RebuilderExceptionRecord])
+@app.task(base=RebuilderTask)
 def record(package, build_status):
     try:
         package = BuildPackage.from_dict(package)
@@ -263,8 +262,7 @@ def record(package, build_status):
     return status
 
 
-@app.task(base=RebuilderTask, default_retry_delay=60, max_retries=3,
-          autoretry_for=[RebuilderExceptionUpload])
+@app.task(base=RebuilderTask)
 def upload():
     status = True
     try:
