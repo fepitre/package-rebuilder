@@ -39,7 +39,7 @@ celery_app_conf = {
         'app.tasks.rebuilder.upload': {'queue': 'upload'},
         'app.tasks.rebuilder.state': {'queue': 'state'},
         'app.tasks.rebuilder.fail': {'queue': 'fail'},
-    },
+    }
 }
 
 app.conf.update(**celery_app_conf)

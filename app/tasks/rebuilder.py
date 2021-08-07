@@ -17,12 +17,12 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-
-import celery
+import celery.bootsteps
 import pymongo
 import subprocess
 import os
 import requests
+import json
 
 from app.celery import app
 from app.libs.logger import log
@@ -40,10 +40,30 @@ class RebuilderTask(celery.Task):
     pass
 
 
-def is_task_active_or_reserved_or_scheduled(args):
+# TODO: find a better way to find what is queued in the broker. Notably it looks like
+#  concurrent access from multiple getter creates duplicate messages.
+def get_celery_queued_tasks(queue_name):
+    active_tasks = []
+    connection = app.connection()
+    try:
+        channel = connection.channel()
+        channel.queue_declare(queue=queue_name, passive=True)
+
+        def dump_message(message):
+            parsed_message = json.loads(message.body)[0][0]
+            active_tasks.append(parsed_message)
+
+        channel.basic_consume(queue=queue_name, callback=dump_message)
+        channel.basic_recover(requeue=True)
+    finally:
+        connection.close()
+    return active_tasks
+
+
+def get_celery_active_tasks():
     inspect = app.control.inspect()
+    tasks = []
     queues = []
-    tasks_args = []
     active = inspect.active()
     reserved = inspect.reserved()
     scheduled = inspect.scheduled()
@@ -57,8 +77,15 @@ def is_task_active_or_reserved_or_scheduled(args):
         for _, queue in d.items():
             for task in queue:
                 if task.get('args'):
-                    tasks_args.append(task['args'][0])
-    return dict(args) in tasks_args
+                    tasks.append(task['args'][0])
+    return tasks
+
+
+@app.on_after_finalize.connect
+def setup_periodic_tasks(sender, **kwargs):
+    schedule = Config['schedule']
+    for dist in Config['dist'].split():
+        sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
 
 @app.task(base=RebuilderTask)
@@ -157,49 +184,46 @@ def state():
         raise RebuilderException("{}: failed to generate status.".format(str(e)))
 
 
-@app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
-    schedule = Config['schedule']
-    for dist in Config['dist'].split():
-        sender.add_periodic_task(schedule, get.s(dist), name=dist)
-
-
 @app.task(base=RebuilderTask)
 def get(dist):
     status = True
-    try:
-        dist = RebuilderDist(dist)
-        packages = dist.repo.get_buildpackages(dist.arch)
-        if not packages:
-            log.debug(f"No packages found for {dist}")
-        db = Recorder(Config['mongodb'])
-        for name in packages.keys():
-            if not packages[name]:
-                log.debug(f"Nothing to build for package {name} ({dist})")
-                continue
-            package = packages[name][0]
-            # We have implemented a retry information to prevent useless retry
-            # from periodic tasks submission. This is to ensure fail status
-            # in case of non-reproducibility. Limitation here is retry due
-            # to network issues. There could be some improvement by storing
-            # celery status/result in a mongodb backend directly.
-            buildrecord = db.get_buildrecord(package)
-            if buildrecord and buildrecord['retry'] == 2:
-                log.error(f"{package}: max retry reached.")
-                continue
-            if buildrecord and buildrecord['status'] in ("reproducible", "unreproducible"):
-                log.debug(f"{package}: already built.")
-                continue
-            if not is_task_active_or_reserved_or_scheduled(package):
-                rebuild.delay(package)
-            else:
-                log.debug(f"{package}: already submitted.")
-    except RebuilderExceptionDist:
-        log.error(f"Cannot parse dist: {dist}.")
-        status = False
-    except (RebuilderExceptionGet, pymongo.errors.ServerSelectionTimeoutError) as e:
-        log.error(str(e))
-        status = False
+    if dist in get_celery_queued_tasks("get"):
+        log.debug(f"{dist}: already submitted. Skipping.")
+    else:
+        try:
+            dist = RebuilderDist(dist)
+            packages = dist.repo.get_buildpackages(dist.arch)
+            if not packages:
+                log.debug(f"No packages found for {dist}")
+            db = Recorder(Config['mongodb'])
+            for name in packages.keys():
+                if not packages[name]:
+                    log.debug(f"Nothing to build for package {name} ({dist})")
+                    continue
+                package = packages[name][0]
+                # fixme: We have implemented a retry information to prevent useless retry
+                #  from periodic tasks submission. This is to ensure fail status
+                #  in case of non-reproducibility. Limitation here is retry due
+                #  to network issues. There could be some improvement by storing
+                #  celery status/result in a mongodb backend directly.
+                buildrecord = db.get_buildrecord(package)
+                if buildrecord and buildrecord['retry'] == 2:
+                    log.error(f"{package}: max retry reached.")
+                    continue
+                if buildrecord and buildrecord['status'] in ("reproducible", "unreproducible"):
+                    log.debug(f"{package}: already built. Skipping.")
+                    continue
+                if dict(package) not in get_celery_queued_tasks("rebuild"):
+                    rebuild.delay(package)
+                    log.debug(f"{package}: submitted for rebuild.")
+                else:
+                    log.debug(f"{package}: already submitted. Skipping.")
+        except RebuilderExceptionDist:
+            log.error(f"Cannot parse dist: {dist}.")
+            status = False
+        except (RebuilderExceptionGet, pymongo.errors.ServerSelectionTimeoutError) as e:
+            log.error(str(e))
+            status = False
     return status
 
 
