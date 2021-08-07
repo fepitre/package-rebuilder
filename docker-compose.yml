@@ -15,7 +15,7 @@ services:
   broker:
     restart: always
 # 'docker.io/rabbitmq:3-management'
-    image: 'docker.io/rabbitmq@sha256:2b88e8f43d230e2a786ebb2bcdfb0ebffbc77806698e4293f8500ed7c94ec1cf'
+    image: 'docker.io/rabbitmq:3-management'
     ports:
       - '5672:5672'
       - '15672:15672'
@@ -39,18 +39,10 @@ services:
 
 ### PackageRebuilder
 
-#  snapshot:
-#    restart: always
-#    build:
-#      context: .
-#      dockerfile: snapshot.Dockerfile
-#    ports:
-#      - '5000:5000'
-
   db:
     restart: always
 # 'docker.io/mongo'
-    image: 'docker.io/mongo@sha256:06ba42906e0346c15a795ff6ebcb3ac88be0f85aa899a6225979029188e312c6'
+    image: 'docker.io/mongo'
     ports:
       - '27017:27017'
     volumes:
