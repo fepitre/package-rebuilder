@@ -22,6 +22,7 @@ import pymongo
 import subprocess
 import os
 import requests
+import base64
 import json
 
 from app.celery import app
@@ -40,24 +41,17 @@ class RebuilderTask(celery.Task):
     pass
 
 
-# TODO: find a better way to find what is queued in the broker. Notably it looks like
-#  concurrent access from multiple getter creates duplicate messages.
 def get_celery_queued_tasks(queue_name):
-    active_tasks = []
-    connection = app.connection()
-    try:
-        channel = connection.channel()
-        channel.queue_declare(queue=queue_name, passive=True)
+    with app.pool.acquire(block=True) as conn:
+        tasks = conn.default_channel.client.lrange(queue_name, 0, -1)
+        submitted_tasks = []
 
-        def dump_message(message):
-            parsed_message = json.loads(message.body)[0][0]
-            active_tasks.append(parsed_message)
+    for task in tasks:
+        j = json.loads(task)
+        body = json.loads(base64.b64decode(j['body']))
+        submitted_tasks.append(body[0][0])
 
-        channel.basic_consume(queue=queue_name, callback=dump_message)
-        channel.basic_recover(requeue=True)
-    finally:
-        connection.close()
-    return active_tasks
+    return submitted_tasks
 
 
 def get_celery_active_tasks():

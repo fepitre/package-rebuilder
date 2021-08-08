@@ -14,14 +14,9 @@ services:
 
   broker:
     restart: always
-# 'docker.io/rabbitmq:3-management'
-    image: 'docker.io/rabbitmq:3-management'
+    image: 'docker.io/redis'
     ports:
-      - '5672:5672'
-      - '15672:15672'
-    volumes:
-      - '/var/lib/rebuilder/broker/data:/var/lib/rabbitmq'
-      - '/var/lib/rebuilder/broker/log:/var/log/rabbitmq'
+     - '6379:6379'
 
   beat:
     restart: always
@@ -33,14 +28,14 @@ services:
     links:
       - broker
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
 
   flower:
     image: mher/flower
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
       - FLOWER_PORT=5556
     ports:
       - 5556:5556
@@ -69,7 +64,7 @@ services:
       - broker
       - db
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
       - MONGO_URL=mongodb://db:27017
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
@@ -90,7 +85,7 @@ services:
     links:
       - broker
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
 # This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
@@ -110,7 +105,7 @@ services:
       - broker
       - db
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
       - MONGO_URL=mongodb://db:27017
     entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=record
 
@@ -127,7 +122,7 @@ services:
     links:
       - broker
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
 
   state:
@@ -141,5 +136,5 @@ services:
     links:
       - broker
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@broker:5672
+      - CELERY_BROKER_URL=redis://broker:6379/0
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=state

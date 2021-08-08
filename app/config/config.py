@@ -31,7 +31,7 @@ if not os.path.exists(config_path):
 config.read(config_path)
 
 broker = config.get('DEFAULT', 'broker',
-                    fallback='amqp://guest:guest@localhost:5672/')
+                    fallback='redis://broker:6379/0')
 mongodb = config.get('DEFAULT', 'mongodb',
                     fallback='mongodb://localhost')
 

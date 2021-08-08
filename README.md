@@ -26,7 +26,7 @@ which services `getter`, `rebuilder`, `recorder` and `uploader` are connected to
                        '----------'    '----------'
 ```
 
-The chosen `broker` here for `celery` is `RabbitMQ`. Each service is doing only tasks defined in separate queues defined as follows:
+The chosen `broker` here for `celery` is `redis`. Each service is doing only tasks defined in separate queues defined as follows:
 
 | SERVICE | TASK/QUEUE |
 |-----------|-----------|
@@ -52,8 +52,7 @@ In practice and with current code check mechanisms, you will only scale `rebuild
 There exist two side services for `celery` which are `beat` and `flower`. The former holds the periodic task scheduling
 and the latter is useful for monitoring `celery` (see [flower](https://flower.readthedocs.io/en/latest/)). Notably, one
 can setup [graphana](https://flower.readthedocs.io/en/latest/prometheus-integration.html#example-grafana-dashboard)
-integration. You can access `flower` interface at `http://localhost:5556` and `RabbitMQ` interface at
-`http://localhost:15672` with credentials `guest:guest` (it is configurable in the `docker-compose.yml`).
+integration. You can access `flower` interface at `http://localhost:5556`.
 
 There exist currently a side service to the whole orchestration called `state`. It is responsible to export all the
 build records and to generate some graphical stats (e.g. [results](http://debian.notset.fr/rebuild/results/)).
@@ -111,7 +110,7 @@ into `docker` images having all the needed configuration information.
 For example, here is the one used by `notset-rebuilder`:
 ```ini
 [DEFAULT]
-broker = amqp://guest:guest@broker:5672/
+broker = redis://broker:6379/0
 mongodb = mongodb://db:27017/
 schedule = 1800
 
@@ -144,7 +143,7 @@ Once it's started, it will fetch for new buildinfo files in Qubes repositories p
 (`schedule` value in `/opt/rebuilder/rebuilder.conf`). You can manually trigger the `get`. For that, you need to install `python3-celery`, `python3-pymongo`, `python3-packaging`
 and `rsync` on the `rebuilder` machine then, in `/opt/rebuilder`, run:
 ```
-$ CELERY_BROKER_URL="amqp://guest:guest@localhost:5672/" ./init_feed.py
+$ CELERY_BROKER_URL="redis://localhost:6379/0" ./init_feed.py
 ```
 
 > TODO: Add initial feed if `rebuild` queue is empty like.
