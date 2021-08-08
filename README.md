@@ -47,7 +47,7 @@ linked to `rebuilder` service. The `fepitre/qubes-snapshot` provides snapshot AP
 and it proxify requests to upstream repositories. A simple cache is implemented in order to manage the huge number of
 requests made by rebuild tools.
 
-In all the provided services, the only scalable one here is the `rebuilder`.
+In practice and with current code check mechanisms, you will only scale `rebuilder` service.
 
 ## PackageRebuilder: the machinery
 
