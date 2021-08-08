@@ -49,6 +49,15 @@ requests made by rebuild tools.
 
 In practice and with current code check mechanisms, you will only scale `rebuilder` service.
 
+There exist two side services for `celery` which are `beat` and `flower`. The former holds the periodic task scheduling
+and the latter is useful for monitoring `celery` (see [flower](https://flower.readthedocs.io/en/latest/)). Notably, one
+can setup [graphana](https://flower.readthedocs.io/en/latest/prometheus-integration.html#example-grafana-dashboard)
+integration. You can access `flower` interface at `http://localhost:5556` and `RabbitMQ` interface at
+`http://localhost:15672` with credentials `guest:guest` (it is configurable in the `docker-compose.yml`).
+
+There exist currently a side service to the whole orchestration called `state`. It is responsible to export all the
+build records and to generate some graphical stats (e.g. [results](http://debian.notset.fr/rebuild/results/)).
+
 ## PackageRebuilder: the machinery
 
 This sections helps to configure a `PackageRebuilder` on any environment (not Qubes specific) assuming it satisfies
