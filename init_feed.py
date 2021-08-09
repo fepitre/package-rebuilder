@@ -3,7 +3,7 @@
 from app.tasks.rebuilder import get
 
 print("Trigger qubes-r4.1-vm-bullseye...")
-get.delay("qubes-4.1-vm-bullseye.all")
+#get.delay("qubes-4.1-vm-bullseye.all")
 get.delay("qubes-4.1-vm-bullseye.amd64")
 
 #print("Trigger bullseye...")

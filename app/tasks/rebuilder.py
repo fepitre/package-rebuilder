@@ -30,15 +30,14 @@ from app.libs.logger import log
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, \
-    RebuilderExceptionRecord, RebuilderException, \
-    RebuilderExceptionDist
+    RebuilderExceptionDist, RebuilderException
 from app.libs.getter import BuildPackage, RebuilderDist
 from app.libs.rebuilder import getRebuilder
-from app.libs.recorder import Recorder
 
 
 class RebuilderTask(celery.Task):
-    pass
+    autoretry_for = (RebuilderExceptionBuild,)
+    max_retries = 2
 
 
 def get_celery_queued_tasks(queue_name):
@@ -94,6 +93,7 @@ def state():
         return "{:.1f}%\n({:d})".format(pct, absolute)
 
     try:
+        # fixme: use celery backend
         db = Recorder(Config['mongodb'])
         data = [x for x in db.dump_buildrecord()]
         for dist in Config['dist'].split():
@@ -180,7 +180,7 @@ def state():
 
 @app.task(base=RebuilderTask)
 def get(dist):
-    status = True
+    result = {"buildinfos": []}
     if dist in get_celery_queued_tasks("get"):
         log.debug(f"{dist}: already submitted. Skipping.")
     else:
@@ -189,95 +189,52 @@ def get(dist):
             packages = dist.repo.get_buildpackages(dist.arch)
             if not packages:
                 log.debug(f"No packages found for {dist}")
-            db = Recorder(Config['mongodb'])
             for name in packages.keys():
                 if not packages[name]:
                     log.debug(f"Nothing to build for package {name} ({dist})")
                     continue
                 package = packages[name][0]
-                # fixme: We have implemented a retry information to prevent useless retry
-                #  from periodic tasks submission. This is to ensure fail status
-                #  in case of non-reproducibility. Limitation here is retry due
-                #  to network issues. There could be some improvement by storing
-                #  celery status/result in a mongodb backend directly.
-                buildrecord = db.get_buildrecord(package)
-                if buildrecord and buildrecord['retry'] == 2:
-                    log.error(f"{package}: max retry reached.")
-                    continue
-                if buildrecord and buildrecord['status'] in ("reproducible", "unreproducible"):
-                    log.debug(f"{package}: already built. Skipping.")
-                    continue
                 if dict(package) not in get_celery_queued_tasks("rebuild"):
                     rebuild.delay(package)
+                    result["buildinfos"].append(dict(package))
                     log.debug(f"{package}: submitted for rebuild.")
                 else:
                     log.debug(f"{package}: already submitted. Skipping.")
         except RebuilderExceptionDist:
             log.error(f"Cannot parse dist: {dist}.")
-            status = False
-        except (RebuilderExceptionGet, pymongo.errors.ServerSelectionTimeoutError) as e:
+        except RebuilderExceptionGet as e:
             log.error(str(e))
-            status = False
-    return status
+    return result
 
 
 @app.task(base=RebuilderTask)
 def rebuild(package):
-    status = "fail"
     # TODO: improve serialize/deserialize Package
     try:
         package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
-        raise RebuilderExceptionBuild(str(e))
-    builder = getRebuilder(package=package,
-                           snapshot_query_url=Config['snapshot'],
-                           snapshot_mirror=Config['snapshot'],
-                           sign_keyid=Config['sign_keyid'])
+        raise RebuilderExceptionBuild from e
+    builder = getRebuilder(
+        package=package,
+        snapshot_query_url=Config['snapshot'],
+        snapshot_mirror=Config['snapshot'],
+        sign_keyid=Config['sign_keyid']
+    )
     metadata = os.path.join(builder.get_output_dir(), 'metadata')
-    metadata_unrepr = os.path.join(
-        builder.get_output_dir(unreproducible=True), 'metadata')
+    metadata_unrepr = os.path.join(builder.get_output_dir(unreproducible=True), 'metadata')
     if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
         try:
-            status = builder.run()
-        except RebuilderExceptionBuild as e:
-            log.error(str(e))
-        upload.delay()
+            package = builder.run()
+        finally:
+            upload.delay()
     else:
         if metadata:
-            status = "reproducible"
+            package.status = "reproducible"
         elif metadata_unrepr:
-            status = "unreproducible"
+            package.status = "unreproducible"
         log.debug("{}: in-toto metadata already exists.".format(package))
-    record.delay(package, status)
-    return status
-
-
-@app.task(base=RebuilderTask)
-def record(package, build_status):
-    try:
-        package = BuildPackage.from_dict(package)
-    except KeyError as e:
-        log.error("Failed to parse package.")
-        raise RebuilderExceptionRecord(str(e))
-    try:
-        db = Recorder(Config['mongodb'])
-        buildrecord = db.get_buildrecord(package)
-        if not buildrecord:
-            log.debug("{}: new buildrecord.".format(package))
-            package.status = build_status
-            status = db.insert_buildrecord(package)
-        else:
-            if buildrecord.retry >= 2:
-                log.error("{}: max retries".format(package))
-            else:
-                log.debug("{}: retry.".format(package))
-                buildrecord.retry += 1
-            status = db.update_buildrecord(buildrecord)
-    except pymongo.errors.ServerSelectionTimeoutError as e:
-        raise RebuilderExceptionRecord("{}: failed to save.".format(str(e)))
-    state.delay()
-    return status
+    return dict(package)
 
 
 @app.task(base=RebuilderTask)

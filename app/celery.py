@@ -26,6 +26,7 @@ app = celery.Celery('PackageRebuilder')
 
 celery_app_conf = {
     'broker_url': Config['broker'],
+    'result_backend': Config['backend'],
     'include': [
         'app.tasks.rebuilder',
     ],

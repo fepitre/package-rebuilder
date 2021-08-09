@@ -29,6 +29,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
 
@@ -36,6 +37,7 @@ services:
     image: mher/flower
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
       - FLOWER_PORT=5556
     ports:
       - 5556:5556
@@ -65,6 +67,7 @@ services:
       - db
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
       - MONGO_URL=mongodb://db:27017
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
@@ -86,6 +89,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
 # This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
@@ -106,6 +110,7 @@ services:
       - db
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
       - MONGO_URL=mongodb://db:27017
     entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=record
 
@@ -123,6 +128,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
 
   state:
@@ -137,4 +143,5 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_BACKEND_URL=mongodb://db:27017
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=state

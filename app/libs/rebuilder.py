@@ -129,13 +129,12 @@ class DebianRebuilder(BaseRebuilder):
 
             if result.returncode == 0:
                 self.logfile = f'{self.basedir}/log-ok/{self.logfile}'
-                status = "reproducible"
+                self.package.status = "reproducible"
             elif result.returncode == 2:
                 self.logfile = f'{self.basedir}/log-ok-unreproducible/{self.logfile}'
-                status = "unreproducible"
+                self.package.status = "unreproducible"
             else:
                 self.logfile = f'{self.basedir}/log-fail/{self.logfile}'
-                status = "fail"
 
             os.makedirs(os.path.dirname(self.logfile), exist_ok=True)
             with open(self.logfile, 'wb') as fd:
@@ -175,7 +174,7 @@ class DebianRebuilder(BaseRebuilder):
                 if not os.path.exists(binpkg):
                     os.symlink(self.package.name, binpkg)
 
-            return status
+            return self.package
         except (subprocess.CalledProcessError, FileNotFoundError,
                 FileExistsError, IndexError, OSError) as e:
             if outputdir and os.path.exists(outputdir):

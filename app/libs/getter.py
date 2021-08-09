@@ -99,10 +99,9 @@ class RebuilderDist:
 
 
 class BuildPackage(dict):
-    def __init__(self, name, epoch, version, arch, dist, url,
-                 status="fail", retry=0, log=""):
+    def __init__(self, name, epoch, version, arch, dist, url, status="", log=""):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
-                      dist=dist, url=url, status=status, retry=retry, log=log)
+                      dist=dist, url=url, status=status, log=log)
 
     def __getattr__(self, item):
         return self[item]
