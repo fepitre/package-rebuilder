@@ -144,17 +144,25 @@ class DebianRepository:
     def get_buildinfos(self, arch):
         files = []
         url = f"https://buildinfos.debian.net/buildinfo-pool_{self.dist}_{arch}.list"
-        resp = requests.get(url)
-        if not resp.ok:
+        try:
+            resp = requests.get(url)
+            if not resp.ok:
+                return files
+        except requests.exceptions.ConnectionError:
             return files
+
         buildinfo_pool = resp.text.rstrip('\n').split('\n')
 
         filtered_packages = []
         for pkgset_name in self.package_sets:
             url = f"https://jenkins.debian.net/userContent/reproducible/" \
                   f"debian/pkg-sets/{self.dist}/{pkgset_name}.pkgset"
-            resp = requests.get(url)
-            if not resp.ok:
+            try:
+                resp = requests.get(url)
+                if not resp.ok:
+                    continue
+            except requests.exceptions.ConnectionError as e:
+                log.error(f"Failed to get {pkgset_name}: {str(e)}")
                 continue
             content = resp.text.rstrip('\n').split('\n')
             filtered_packages += content
