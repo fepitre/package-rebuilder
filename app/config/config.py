@@ -22,6 +22,7 @@ import configparser
 import os
 
 DEFAULT_SCHEDULE = 1800
+DEFAULT_MAX_RETRIES = 2
 
 config = configparser.RawConfigParser(allow_no_value=False)
 # TODO: put the configuration elsewhere
@@ -49,6 +50,12 @@ try:
     schedule = int(config.get('DEFAULT', 'schedule', fallback=DEFAULT_SCHEDULE))
 except ValueError:
     schedule = DEFAULT_SCHEDULE
+
+try:
+    max_retries = int(config.get('DEFAULT', 'max_retries', fallback=DEFAULT_MAX_RETRIES))
+except ValueError:
+    max_retries = DEFAULT_MAX_RETRIES
+
 sign_keyid = config.get('DEFAULT', 'in-toto-sign-key-fpr')
 ssh_key = config.get('DEFAULT', 'repo-ssh-key')
 remote_ssh_host = config.get('DEFAULT', 'repo-remote-ssh-host')
@@ -61,6 +68,7 @@ Config = {
     'mongodb': mongodb,
     'snapshot': snapshot,
     'schedule': schedule,
+    'max_retries': max_retries,
     'sign_keyid': sign_keyid,
     'ssh_key': ssh_key,
     'remote_ssh_host': remote_ssh_host,

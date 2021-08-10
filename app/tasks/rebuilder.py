@@ -38,7 +38,7 @@ from app.libs.rebuilder import getRebuilder
 
 class RebuilderTask(celery.Task):
     autoretry_for = (RebuilderExceptionBuild,)
-    max_retries = 2
+    max_retries = Config['max_retries']
 
 
 def get_celery_queued_tasks(queue_name):
