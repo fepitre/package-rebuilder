@@ -18,12 +18,13 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 import celery.bootsteps
-import pymongo
 import subprocess
 import os
 import requests
 import base64
 import json
+
+import sqlalchemy.exc
 
 from app.celery import app
 from app.libs.logger import log
@@ -74,28 +75,37 @@ def get_celery_active_tasks():
     return tasks
 
 
-@app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
-    schedule = Config['schedule']
-    for dist in Config['dist'].split():
-        sender.add_periodic_task(schedule, get.s(dist), name=dist)
-
-
-@app.task(base=RebuilderTask)
-def state():
+def generate_results():
     import json
     import numpy as np
     import matplotlib.pyplot as plt
+
     from packaging.version import parse as parse_version
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from celery.backends.database.models import TaskExtended
+
+    url = Config['backend']
+    # this is useful if we call the function outside the workers
+    if 'CELERY_BACKEND_URL' in os.environ:
+        url = os.environ['CELERY_BACKEND_URL']
+
+    engine = create_engine(url.replace('db+sqlite', 'sqlite'))
+    Base = declarative_base()
+    Base.metadata.bind = engine
+    Base.metadata.create_all(engine)
+    DBSession = sessionmaker(bind=engine)
+    session = DBSession()
 
     def func(pct, allvals):
         absolute = round(pct / 100. * np.sum(allvals))
         return "{:.1f}%\n({:d})".format(pct, absolute)
 
     try:
-        # fixme: use celery backend
-        db = Recorder(Config['mongodb'])
-        data = [x for x in db.dump_buildrecord()]
+        results = [r.to_dict() for r in session.query(TaskExtended).all()]
+        data = [r["result"]["rebuild"] for r in results
+                if r.get("result", {}).get("rebuild", None)]
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
             results_path = f"/rebuild/{dist.distribution}/results"
@@ -115,8 +125,12 @@ def state():
                 if dist.distribution == "debian":
                     url = f"https://jenkins.debian.net/userContent/reproducible/" \
                           f"debian/pkg-sets/{dist.name}/{pkgset_name}.pkgset"
-                    resp = requests.get(url)
-                    if not resp.ok:
+                    try:
+                        resp = requests.get(url)
+                        if not resp.ok:
+                            continue
+                    except requests.exceptions.ConnectionError as e:
+                        log.error(f"Failed to get {pkgset_name}: {str(e)}")
                         continue
                     content = resp.text.rstrip('\n').split('\n')
                 else:
@@ -174,8 +188,15 @@ def state():
                 with open(f"{results_path}/{dist}_db.json", "w") as fd:
                     fd.write(json.dumps(data_ordered, indent=2) + "\n")
         upload.delay()
-    except (pymongo.errors.ServerSelectionTimeoutError, RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
+    except (RebuilderExceptionDist, FileNotFoundError, ValueError, sqlalchemy.exc.SQLAlchemyError) as e:
         raise RebuilderException("{}: failed to generate status.".format(str(e)))
+
+
+@app.on_after_finalize.connect
+def setup_periodic_tasks(sender, **kwargs):
+    schedule = Config['schedule']
+    for dist in Config['dist'].split():
+        sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
 
 @app.task(base=RebuilderTask)
@@ -234,6 +255,7 @@ def rebuild(package):
         elif metadata_unrepr:
             package.status = "unreproducible"
         log.debug("{}: in-toto metadata already exists.".format(package))
+
     result = {"rebuild": dict(package)}
     return result
 
@@ -241,6 +263,13 @@ def rebuild(package):
 @app.task(base=RebuilderTask)
 def upload():
     status = True
+
+    # generate plots from results
+    try:
+        generate_results()
+    except RebuilderException as e:
+        log.error(f"Failed to generate plots: {str(e)}")
+
     try:
         if Config['ssh_key'] and Config['remote_ssh_host'] and \
                 Config['remote_ssh_basedir']:
