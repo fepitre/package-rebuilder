@@ -29,7 +29,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
+      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
 
@@ -37,38 +37,27 @@ services:
     image: mher/flower
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
+      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
       - FLOWER_PORT=5556
     ports:
       - 5556:5556
 
 ### PackageRebuilder
 
-  db:
-    restart: always
-# 'docker.io/mongo'
-    image: 'docker.io/mongo'
-    ports:
-      - '27017:27017'
-    volumes:
-      - '/var/lib/rebuilder/db:/data/db'
-    command: --quiet
-
   getter:
     restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
+# getter worker needs to store results in backend (here a sqlite file)
+      - '/var/lib/rebuilder/db:/db'
     depends_on:
       - broker
-      - db
     links:
       - broker
-      - db
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
-      - MONGO_URL=mongodb://db:27017
+      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
 
@@ -80,7 +69,9 @@ services:
       dockerfile: rebuilder.Dockerfile
     volumes:
       - .:/app
-# rebuilder worker(s) need(s) artifacts directory and GPG for signing in-toto metadata
+# rebuilder worker needs to store results in backend (here a sqlite file)
+      - '/var/lib/rebuilder/db:/db'
+# rebuilder worker needs artifacts directory and GPG for signing in-toto metadata
       - '/var/lib/rebuilder/rebuild:/rebuild'
       - '/var/lib/rebuilder/gnupg:/root/.gnupg'
     depends_on:
@@ -89,7 +80,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
+      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
 # This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
@@ -97,28 +88,13 @@ services:
 #      mode: replicated
 #      replicas: 2
 
-  recorder:
-    restart: always
-    image: 'rebuilder_base'
-    volumes:
-      - .:/app
-    depends_on:
-      - broker
-      - db
-    links:
-      - broker
-      - db
-    environment:
-      - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
-      - MONGO_URL=mongodb://db:27017
-    entrypoint: celery -A app worker --loglevel=INFO -O fair --queues=record
-
   uploader:
     restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
+# uploader worker needs to store results in backend (here a sqlite file)
+      - '/var/lib/rebuilder/db:/db'
 # uploader worker needs artifacts directory and SSH key for rsyncing on remote location
       - '/var/lib/rebuilder/rebuild:/rebuild'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
@@ -128,7 +104,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
+      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
 
   state:
@@ -143,5 +119,5 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=mongodb://db:27017
+      - CELERY_BACKEND_URL=db+sqlite:///db/results.sqlite
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=state
