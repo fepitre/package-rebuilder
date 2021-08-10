@@ -106,18 +106,3 @@ services:
       - CELERY_BROKER_URL=redis://broker:6379/0
       - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
-
-  state:
-    restart: always
-    image: 'rebuilder_base'
-    volumes:
-      - .:/app
-      - '/var/lib/rebuilder/rebuild:/rebuild'
-    depends_on:
-      - broker
-    links:
-      - broker
-    environment:
-      - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=db+sqlite:///db/results.sqlite
-    entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=state
