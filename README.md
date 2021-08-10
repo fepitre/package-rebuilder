@@ -9,53 +9,51 @@ expected until a proper stable release is made. For more information, don't hesi
 
 The current design of `PackageRebuilder` is based on individual tasks orchestrated with the help of `celery` engine
 (see https://docs.celeryproject.org/en/stable/). `celery` uses a `broker` to receive and distribute task in specific queues for
-which services `getter`, `rebuilder`, `recorder` and `uploader` are connected to.
+which services `getter`, `rebuilder` and `uploader` are connected to. All the task results are stored in `backend`.
 
 ```
-                               .--------.
-                               | getter |
-                               '----.---'
-                                    |
-.----------------------.       .----'---.    .--------------.
-| Ochestrator (celery) --------| broker |----| rebuilder(s) |
-'----------------------'       .--------.    '--------------'
-                              /          \
-                             /            \
-                       .----'-----.    .---'------.
-                       | recorder |    | uploader |
-                       '----------'    '----------'
+                                              .--------------.
+                                             .| getter       |
+        .--------------.                    / '--------------'
+        | broker       |.                  /
+        '--------------' \                /
+                          '--------------'    .--------------.
+                          | Orchestrator |----| rebuilder(s) |
+                          .--------------.    '--------------'
+        .--------------. /                \
+        | backend      |'                  \
+        '--------------'                    \ .--------------.
+                                             '| uploader     |
+                                              '--------------'
 ```
 
-The chosen `broker` here for `celery` is `redis`. Each service is doing only tasks defined in separate queues defined as follows:
+The chosen `broker` here for `celery` is `redis` and the `backend` is `sqlalchemy` with `sqlite` as database engine.
+
+> Note: In the case of `celery` backend with `sqlite`, there is no particular Docker service running as database is
+> simply a file. For any other case like `postgresql`, `backend` service would be added in `docker-compose.yml` serving
+> `postgresql` server.
+
+Each service is doing only tasks defined in separate queues defined as follows:
 
 | SERVICE | TASK/QUEUE |
 |-----------|-----------|
 | getter | get |
 | rebuilder | rebuild |
 | uploader | upload |
-| recorder | record |
 
 The `getter` service is responsible to get the latest `buildinfo` on `Qubes OS` or `Debian` (soon `Fedora`) repositories
-and to add new `rebuild` tasks. Once a `rebuilder` has finished a `rebuild` task, on success, it adds a new `upload` task for
-`uploader`. Either on success or failure, a build record containing useful information about the build is 
-created with a `record` task. Notably, a build record contains all the information about a build, its status and 
-the number of retries. All build records are stored into a `Mongo` database provided by `db` service which is
-only linked with `getter` and `recorder` services. It does not receive tasks, it is just a database backend.
-In the same way, the `rebuilder` service has its rebuild tools using a snapshot API to query packages information (see:
-https://github.com/fepitre/qubes-snapshot and https://snapshot.debian.org/). For that, we provide `snapshot` service only
-linked to `rebuilder` service. The `fepitre/qubes-snapshot` provides snapshot API endpoints for Qubes OS repositories,
-and it proxify requests to upstream repositories. A simple cache is implemented in order to manage the huge number of
-requests made by rebuild tools.
-
-In practice and with current code check mechanisms, you will only scale `rebuilder` service.
+and to add new `rebuild` tasks. Once a `rebuilder` has finished it adds a new `upload` task for
+`uploader`. Either on success or failure, a task result containing useful information about the build is
+created in `backend`. Notably, it contains all the information about a build, its status and
+the number of retries. In practice, you will only scale `rebuilder` service.
 
 There exist two side services for `celery` which are `beat` and `flower`. The former holds the periodic task scheduling
 and the latter is useful for monitoring `celery` (see [flower](https://flower.readthedocs.io/en/latest/)). Notably, one
 can setup [graphana](https://flower.readthedocs.io/en/latest/prometheus-integration.html#example-grafana-dashboard)
 integration. You can access `flower` interface at `http://localhost:5556`.
 
-There exist currently a side service to the whole orchestration called `state`. It is responsible to export all the
-build records and to generate some graphical stats (e.g. [results](http://debian.notset.fr/rebuild/results/)).
+`uploader` service is also responsible to export all the rebuild task results and to generate some graphical stats
+(e.g. [results](http://debian.notset.fr/rebuild/results/)).
 
 ## PackageRebuilder: the machinery
 
@@ -111,7 +109,10 @@ For example, here is the one used by `notset-rebuilder`:
 ```ini
 [DEFAULT]
 broker = redis://broker:6379/0
-mongodb = mongodb://db:27017/
+backend = db+sqlite:////db/results.sqlite
+snapshot = http://debian.notset.fr/snapshot
+
+# Scheduled task period for fetching latest buildinfo files
 schedule = 1800
 
 # GPG key fingerprint (container keyring: /root/.gnupg)
@@ -122,7 +123,9 @@ repo-ssh-key = id_rsa
 
 # RSYNC SSH destination
 repo-remote-ssh-host = rebuilder@mirror.notset.fr
-repo-remote-ssh-basedir = /data/qubes/rebuild
+repo-remote-ssh-basedir = /data/rebuilder
+
+dist = qubes-4.1-vm-bullseye.amd64 qubes-4.1-vm-bullseye.all unstable+essential+required+build-essential+build-essential-depends.amd64 unstable+essential+required+build-essential+build-essential-depends.all
 ```
 In the current `docker` setup, you only need to adjust `in-toto-sign-key-fpr`, `repo-ssh-key`, `repo-remote-ssh-host`
 and `repo-remote-ssh-basedir` values. Here `schedule` value is the time in second for which `get` task will be
