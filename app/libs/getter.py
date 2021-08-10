@@ -35,7 +35,7 @@ except ImportError:
 from packaging.version import parse as parse_version
 from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
-
+from app.libs.logger import log
 
 def parse_rpm_buildinfo_fname(buildinfo):
     bn = os.path.basename(

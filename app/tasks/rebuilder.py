@@ -180,7 +180,7 @@ def state():
 
 @app.task(base=RebuilderTask)
 def get(dist):
-    result = {"buildinfos": []}
+    result = {"get": []}
     if dist in get_celery_queued_tasks("get"):
         log.debug(f"{dist}: already submitted. Skipping.")
     else:
@@ -196,7 +196,7 @@ def get(dist):
                 package = packages[name][0]
                 if dict(package) not in get_celery_queued_tasks("rebuild"):
                     rebuild.delay(package)
-                    result["buildinfos"].append(dict(package))
+                    result["get"].append(dict(package))
                     log.debug(f"{package}: submitted for rebuild.")
                 else:
                     log.debug(f"{package}: already submitted. Skipping.")
@@ -234,7 +234,8 @@ def rebuild(package):
         elif metadata_unrepr:
             package.status = "unreproducible"
         log.debug("{}: in-toto metadata already exists.".format(package))
-    return dict(package)
+    result = {"rebuild": dict(package)}
+    return result
 
 
 @app.task(base=RebuilderTask)
