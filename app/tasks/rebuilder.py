@@ -104,15 +104,19 @@ def generate_results():
 
     try:
         results = [r.to_dict() for r in session.query(TaskExtended).all()]
-        data = [r["result"]["rebuild"] for r in results
-                if r.get("result", {}).get("rebuild", None)]
+        filtered_results = [r for r in results
+                            if r.get("result", {}).get("rebuild", None)]
+        data = [
+            r["result"]["rebuild"].update({"retries": r["retries"], "state": r["state"]})
+            for r in filtered_results
+            if r.get("result", {}).get("rebuild", None)
+        ]
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
             results_path = f"/rebuild/{dist.distribution}/results"
             os.makedirs(results_path, exist_ok=True)
 
-            data_dist = [x for x in data
-                         if x['dist'] == dist.name and x['arch'] == dist.arch]
+            data_dist = [x for x in data if x['dist'] == dist.name and x['arch'] == dist.arch]
             data_ordered = {}
             for x in data_dist:
                 if data_ordered.get(x["name"], None):
@@ -137,16 +141,12 @@ def generate_results():
                     content = data_ordered.keys()
 
                 result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
-                for pkg_name in data_ordered.keys():
-                    if pkg_name not in content:
-                        continue
-                    if data_ordered.get(pkg_name, None):
+                for pkg_name in content:
+                    if data_ordered.get(pkg_name, {}).get('status', None):
                         if data_ordered[pkg_name]["status"] == "reproducible":
                             result["repro"].append(pkg_name)
                         elif data_ordered[pkg_name]["status"] == "unreproducible":
                             result["unrepro"].append(pkg_name)
-                        elif data_ordered[pkg_name]["status"] == "fail":
-                            result["fail"].append(pkg_name)
                     else:
                         result["pending"].append(pkg_name)
 
@@ -185,9 +185,8 @@ def generate_results():
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
                 fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png")
 
-                with open(f"{results_path}/{dist}_db.json", "w") as fd:
-                    fd.write(json.dumps(data_ordered, indent=2) + "\n")
-        upload.delay()
+                # with open(f"{results_path}/{dist}_db.json", "w") as fd:
+                #     fd.write(json.dumps(data_ordered, indent=2) + "\n")
     except (RebuilderExceptionDist, FileNotFoundError, ValueError, sqlalchemy.exc.SQLAlchemyError) as e:
         raise RebuilderException("{}: failed to generate status.".format(str(e)))
 
