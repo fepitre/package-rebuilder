@@ -145,7 +145,7 @@ class DebianRebuilder(BaseRebuilder):
 
             if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(
-                    result.returncode, ' '.join(build_cmd))
+                    result.returncode, build_cmd)
 
             os.chdir(tempdir)
             buildinfo = glob.glob("{}*.buildinfo".format(self.package.name))[0]
@@ -179,8 +179,7 @@ class DebianRebuilder(BaseRebuilder):
                 FileExistsError, IndexError, OSError) as e:
             if outputdir and os.path.exists(outputdir):
                 shutil.rmtree(outputdir)
-            raise RebuilderExceptionBuild(
-                "Failed to build {}: {}".format(self.package.url, str(e)))
+            raise RebuilderExceptionBuild(dict(self.package))
 
 
 class QubesRebuilderRPM(FedoraRebuilder):
