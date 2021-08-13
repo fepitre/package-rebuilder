@@ -145,7 +145,7 @@ class DebianRebuilder(BaseRebuilder):
 
             if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(
-                    result.returncode, build_cmd)
+                    result.returncode, ' '.join(build_cmd))
 
             os.chdir(tempdir)
             buildinfo = glob.glob("{}*.buildinfo".format(self.package.name))[0]
