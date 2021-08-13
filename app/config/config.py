@@ -37,8 +37,8 @@ backend = config.get('DEFAULT', 'backend', fallback='mongodb://backend:27017')
 if 'CELERY_BROKER_URL' in os.environ:
     broker = os.environ['CELERY_BROKER_URL']
 
-if 'CELERY_BACKEND_URL' in os.environ:
-    broker = os.environ['CELERY_BACKEND_URL']
+if 'CELERY_RESULT_BACKEND' in os.environ:
+    broker = os.environ['CELERY_RESULT_BACKEND']
 
 snapshot = config.get('DEFAULT', 'snapshot', fallback='http://debian.notset.fr/snapshot')
 

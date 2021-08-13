@@ -18,11 +18,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-import time
-import hashlib
 import json
-
-from pymongo import MongoClient
 
 DEBIAN = {
     "buster": "10",
@@ -50,72 +46,16 @@ def is_debian(dist):
     return DEBIAN.get(dist, None) is not None
 
 
-class MongoCli:
-    def __init__(self, uri):
-        self.conn = MongoClient(uri, connect=False)
-        self.db = None
-
-    @staticmethod
-    def _gen_id(patterns):
-        return hashlib.md5(''.join(patterns).encode()).hexdigest()
-
-    def connect(self, db):
-        self.db = self.conn[db]
-
-    def clear(self, do=False):
-        if do:
-            self.db["builds"].drop()
-
-    def get(self, col, query):
-        results = []
-        collection = self.db[col]
-        queried_results = list(collection.find(query))
-        for result in queried_results:
-            # del result['_id']
-            results.append(result)
-
-        return results
-
-    def insert(self, col, data, provided_id=None):
-        collection = self.db[col]
-        if provided_id:
-            data['_id'] = provided_id
-        inserted_id = collection.insert_one(data).inserted_id
-        return inserted_id
-
-    def update(self, col, data, provided_id):
-        collection = self.db[col]
-
-        updated = collection.update_one({'_id': provided_id}, {'$set': data})
-
-        return provided_id, updated.modified_count == 0
-
-    def delete(self, col, input_id):
-        collection = self.db[col]
-        deleted = collection.delete_one({'_id': input_id})
-
-        return deleted.deleted_count == 0
-
-    def dump(self, col, limit, keep_id):
-        collection = self.db[col]
-        cursor = collection.find()
-        data = list(cursor)
-        dumped_data = []
-        for num, doc in enumerate(data):
-            if not keep_id:
-                del doc["_id"]
-            dumped_data.append(doc)
-            if limit and limit == num:
-                break
-
-        return dumped_data
-
-    def load(self, col, src):
-        collection = self.db[col]
-        with open(src, 'r') as src_fd:
-            data = json.loads(src_fd.read())
-        try:
-            collection.insert_many(data)
-        except Exception as e:
-            print(e)
-            pass
+def get_backend_tasks(app):
+    backend = app.backend
+    col = backend.collection.find()
+    results = []
+    for _, doc in enumerate(col):
+        r = {}
+        for f in ['status', 'result']:
+            value = doc[f]
+            if f == 'result' and isinstance(doc[f], str):
+                value = json.loads(doc[f])
+            r[f] = value
+        results.append(r)
+    return results

@@ -33,9 +33,10 @@ except ImportError:
     debian = None
 
 from packaging.version import parse as parse_version
-from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora
+from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_backend_tasks
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
 from app.libs.logger import log
+
 
 def parse_rpm_buildinfo_fname(buildinfo):
     bn = os.path.basename(
@@ -62,6 +63,29 @@ def parse_deb_buildinfo_fname(buildinfo):
         parsed_bn['version'] = parsed_nv._BaseVersion__full_version
         parsed_bn['arch'] = parsed_tmp[2].split('-')
     return parsed_bn
+
+
+def rebuild_task_parser(task):
+    parsed_task = None
+    if task["status"] == 'SUCCESS' and task["result"].get("rebuild", None):
+        parsed_task = task["result"]["rebuild"]
+    elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
+            and task["result"]["exc_type"] == "RebuilderExceptionBuild":
+        # We have stored package info in exception
+        parsed_task = task["result"]["exc_message"][0]
+        parsed_task["status"] = task["status"].lower()
+    return parsed_task
+
+
+def get_rebuilt_packages(app):
+    parsed_packages = []
+    tasks = get_backend_tasks(app)
+    for task in tasks:
+        parsed_task = rebuild_task_parser(task)
+        if parsed_task:
+            package = BuildPackage.from_dict(parsed_task)
+            parsed_packages.append(package)
+    return parsed_packages
 
 
 class RebuilderDist:
@@ -99,9 +123,9 @@ class RebuilderDist:
 
 
 class BuildPackage(dict):
-    def __init__(self, name, epoch, version, arch, dist, url, status="", log=""):
+    def __init__(self, name, epoch, version, arch, dist, url, status="", log="", retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
-                      dist=dist, url=url, status=status, log=log)
+                      dist=dist, url=url, status=status, log=log, retries=retries)
 
     def __getattr__(self, item):
         return self[item]
@@ -114,6 +138,9 @@ class BuildPackage(dict):
         if self.epoch and self.epoch != 0:
             result = f'{self.epoch}:{result}'
         return result
+
+    def __eq__(self, other):
+        return repr(self) == repr(other)
 
     @classmethod
     def from_dict(cls, pkg):

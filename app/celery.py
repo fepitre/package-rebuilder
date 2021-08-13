@@ -32,7 +32,7 @@ celery_app_conf = {
     ],
     'enable_utc': True,
     'timezone': 'UTC',
-    'task_acks_late': True,
+#    'task_acks_late': True,
     'task_routes': {
         'app.tasks.rebuilder.get': {'queue': 'get'},
         'app.tasks.rebuilder.rebuild': {'queue': 'rebuild'},

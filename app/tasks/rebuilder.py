@@ -32,7 +32,7 @@ from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, \
     RebuilderExceptionDist, RebuilderException
-from app.libs.getter import BuildPackage, RebuilderDist
+from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
 from app.libs.rebuilder import getRebuilder
 
 
@@ -75,36 +75,18 @@ def get_celery_active_tasks():
     return tasks
 
 
-def generate_results():
+def generate_results(app):
     import numpy as np
     import matplotlib.pyplot as plt
 
     from packaging.version import parse as parse_version
-    from app.libs.common import MongoCli
-
-    url = Config['backend']
-    # this is useful if we call the function outside the workers
-    if 'CELERY_BACKEND_URL' in os.environ:
-        url = os.environ['CELERY_BACKEND_URL']
 
     def func(pct, allvals):
         absolute = round(pct / 100. * np.sum(allvals))
         return "{:.1f}%\n({:d})".format(pct, absolute)
 
+    results = get_rebuilt_packages(app)
     try:
-        cli = MongoCli(url)
-        cli.connect('celery')
-        results = []
-        for r in cli.dump('celery_taskmeta', limit=None, keep_id=True):
-            # result is stored as str
-            r["result"] = json.loads(r["result"])
-            if not isinstance(r["result"], dict):
-                continue
-            if r.get("result", {}).get("rebuild", None):
-                results.append(r["result"]["rebuild"])
-            elif r.get("result", {}).get("exc_message"):
-                r["result"]["exc_message"][0]["status"] = r["status"].lower()
-                results.append(r["result"]["exc_message"][0])
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
             results_path = f"/rebuild/{dist.distribution}/results"
@@ -208,15 +190,33 @@ def get(dist):
             packages = dist.repo.get_buildpackages(dist.arch)
             if not packages:
                 log.debug(f"No packages found for {dist}")
+
+            # get previous triggered packages builds
+            stored_packages = get_rebuilt_packages(app)
+
             for name in packages.keys():
                 if not packages[name]:
                     log.debug(f"Nothing to build for package {name} ({dist})")
                     continue
                 package = packages[name][0]
+                # check if package has already been triggered for build
+                stored_package = None
+                for p in stored_packages:
+                    if p == package:
+                        stored_package = p
+                        break
+                if stored_package and stored_package.status in ("reproducible", "unreproducible", "failure"):
+                    log.debug(f"{package}: already built ({stored_package.status}). Skipping")
+                    continue
+                if stored_package and stored_package.status == "retry":
+                    log.debug(f"{package}: already submitted. Skipping.")
+                    continue
                 if dict(package) not in get_celery_queued_tasks("rebuild"):
-                    rebuild.delay(package)
-                    result["get"].append(dict(package))
                     log.debug(f"{package}: submitted for rebuild.")
+                    # Add rebuild task
+                    rebuild.delay(package)
+                    # For debug purposes
+                    result["get"].append(dict(package))
                 else:
                     log.debug(f"{package}: already submitted. Skipping.")
         except RebuilderExceptionDist:
@@ -245,26 +245,34 @@ def rebuild(package):
     if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
         try:
             package = builder.run()
-        finally:
-            upload.delay()
+        except RebuilderExceptionBuild as e:
+            package, = e.args
+            # Ensure to keep a trace of retries for backend
+            package["retries"] = rebuild.request.retries
+            raise RebuilderExceptionBuild(package)
     else:
         if metadata:
             package.status = "reproducible"
         elif metadata_unrepr:
             package.status = "unreproducible"
         log.debug("{}: in-toto metadata already exists.".format(package))
-
+    upload.delay(package)
     result = {"rebuild": dict(package)}
     return result
 
 
 @app.task(base=RebuilderTask)
-def upload():
-    status = True
+def upload(package):
+    # TODO: improve serialize/deserialize Package
+    try:
+        package = BuildPackage.from_dict(package)
+    except KeyError as e:
+        log.error("Failed to parse package.")
+        raise RebuilderExceptionBuild from e
 
     # generate plots from results
     try:
-        generate_results()
+        generate_results(app)
     except RebuilderException as e:
         log.error(f"Failed to generate plots: {str(e)}")
 
@@ -295,9 +303,9 @@ def upload():
                 ]
                 subprocess.run(cmd, check=True)
         else:
-            log.critical('Missing SSH key or SSH remote destination')
-            status = False
+            raise FileNotFoundError('Missing SSH key or SSH remote destination')
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
         log.error(str(e))
         raise RebuilderExceptionUpload("Failed to upload")
-    return status
+    result = {"upload": dict(package)}
+    return result
