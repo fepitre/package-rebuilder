@@ -32,17 +32,13 @@ if not os.path.exists(config_path):
 config.read(config_path)
 
 broker = config.get('DEFAULT', 'broker', fallback='redis://broker:6379/0')
-backend = config.get('DEFAULT', 'backend', fallback='db+sqlite:///tmp/results.sqlite')
-mongodb = config.get('DEFAULT', 'mongodb', fallback='mongodb://db:27017')
+backend = config.get('DEFAULT', 'backend', fallback='mongodb://backend:27017')
 
 if 'CELERY_BROKER_URL' in os.environ:
     broker = os.environ['CELERY_BROKER_URL']
 
 if 'CELERY_BACKEND_URL' in os.environ:
     broker = os.environ['CELERY_BACKEND_URL']
-
-if 'MONGO_URL' in os.environ:
-    mongodb = os.environ['MONGO_URL']
 
 snapshot = config.get('DEFAULT', 'snapshot', fallback='http://debian.notset.fr/snapshot')
 
@@ -65,7 +61,6 @@ dist = config.get('DEFAULT', 'dist', fallback=[])
 Config = {
     'broker': broker,
     'backend': backend,
-    'mongodb': mongodb,
     'snapshot': snapshot,
     'schedule': schedule,
     'max_retries': max_retries,

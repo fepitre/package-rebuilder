@@ -18,6 +18,16 @@ services:
     ports:
      - '6379:6379'
 
+  backend:
+    restart: always
+# 'docker.io/mongo'
+    image: 'docker.io/mongo'
+    ports:
+      - '27017:27017'
+    volumes:
+      - '/var/lib/rebuilder/db:/data/db'
+    command: --quiet
+
   beat:
     restart: always
     image: 'rebuilder_base'
@@ -29,7 +39,7 @@ services:
       - broker
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
+      - CELERY_BACKEND_URL=mongodb://backend:27017
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
 
@@ -37,7 +47,7 @@ services:
     image: mher/flower
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
+      - CELERY_BACKEND_URL=mongodb://backend:27017
       - FLOWER_PORT=5556
     ports:
       - 5556:5556
@@ -49,15 +59,15 @@ services:
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# getter worker needs to store results in backend (here a sqlite file)
-      - '/var/lib/rebuilder/db:/db'
     depends_on:
       - broker
+      - backend
     links:
       - broker
+      - backend
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
+      - CELERY_BACKEND_URL=mongodb://backend:27017
 # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
 
@@ -69,18 +79,18 @@ services:
       dockerfile: rebuilder.Dockerfile
     volumes:
       - .:/app
-# rebuilder worker needs to store results in backend (here a sqlite file)
-      - '/var/lib/rebuilder/db:/db'
-# rebuilder worker needs artifacts directory and GPG for signing in-toto metadata
+# rebuilder worker(s) need(s) artifacts directory and GPG for signing in-toto metadata
       - '/var/lib/rebuilder/rebuild:/rebuild'
       - '/var/lib/rebuilder/gnupg:/root/.gnupg'
     depends_on:
       - broker
+      - backend
     links:
       - broker
+      - backend
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
+      - CELERY_BACKEND_URL=mongodb://backend:27017
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
 # This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
@@ -93,16 +103,16 @@ services:
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# uploader worker needs to store results in backend (here a sqlite file)
-      - '/var/lib/rebuilder/db:/db'
 # uploader worker needs artifacts directory and SSH key for rsyncing on remote location
       - '/var/lib/rebuilder/rebuild:/rebuild'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
     depends_on:
       - broker
+      - backend
     links:
       - broker
+      - backend
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
-      - CELERY_BACKEND_URL=db+sqlite:////db/results.sqlite
+      - CELERY_BACKEND_URL=mongodb://backend:27017
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=upload
