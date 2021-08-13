@@ -76,47 +76,41 @@ def get_celery_active_tasks():
 
 
 def generate_results():
-    import json
     import numpy as np
     import matplotlib.pyplot as plt
 
     from packaging.version import parse as parse_version
-    from sqlalchemy.ext.declarative import declarative_base
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from celery.backends.database.models import TaskExtended
+    from app.libs.common import MongoCli
 
     url = Config['backend']
     # this is useful if we call the function outside the workers
     if 'CELERY_BACKEND_URL' in os.environ:
         url = os.environ['CELERY_BACKEND_URL']
 
-    engine = create_engine(url.replace('db+sqlite', 'sqlite'))
-    Base = declarative_base()
-    Base.metadata.bind = engine
-    Base.metadata.create_all(engine)
-    DBSession = sessionmaker(bind=engine)
-    session = DBSession()
-
     def func(pct, allvals):
         absolute = round(pct / 100. * np.sum(allvals))
         return "{:.1f}%\n({:d})".format(pct, absolute)
 
     try:
-        results = [r.to_dict() for r in session.query(TaskExtended).all()]
-        filtered_results = [r for r in results
-                            if r.get("result", {}).get("rebuild", None)]
-        data = [
-            r["result"]["rebuild"].update({"retries": r["retries"], "state": r["state"]})
-            for r in filtered_results
-            if r.get("result", {}).get("rebuild", None)
-        ]
+        cli = MongoCli(url)
+        cli.connect('celery')
+        results = []
+        for r in cli.dump('celery_taskmeta', limit=None, keep_id=True):
+            # result is stored as str
+            r["result"] = json.loads(r["result"])
+            if not isinstance(r["result"], dict):
+                continue
+            if r.get("result", {}).get("rebuild", None):
+                results.append(r["result"]["rebuild"])
+            elif r.get("result", {}).get("exc_message"):
+                r["result"]["exc_message"][0]["status"] = r["status"].lower()
+                results.append(r["result"]["exc_message"][0])
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
             results_path = f"/rebuild/{dist.distribution}/results"
             os.makedirs(results_path, exist_ok=True)
 
-            data_dist = [x for x in data if x['dist'] == dist.name and x['arch'] == dist.arch]
+            data_dist = [x for x in results if x['dist'] == dist.name and x['arch'] == dist.arch]
             data_ordered = {}
             for x in data_dist:
                 if data_ordered.get(x["name"], None):
@@ -138,6 +132,7 @@ def generate_results():
                         continue
                     content = resp.text.rstrip('\n').split('\n')
                 else:
+                    # fixme: for Qubes we need a list of packages
                     content = data_ordered.keys()
 
                 result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
@@ -147,6 +142,10 @@ def generate_results():
                             result["repro"].append(pkg_name)
                         elif data_ordered[pkg_name]["status"] == "unreproducible":
                             result["unrepro"].append(pkg_name)
+                        elif data_ordered[pkg_name]["status"] == "failure":
+                            result["fail"].append(pkg_name)
+                        elif data_ordered[pkg_name]["status"] == "retry":
+                            result["pending"].append(pkg_name)
                     else:
                         result["pending"].append(pkg_name)
 
