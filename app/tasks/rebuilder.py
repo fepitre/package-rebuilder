@@ -24,8 +24,6 @@ import requests
 import base64
 import json
 
-import sqlalchemy.exc
-
 from app.celery import app
 from app.libs.logger import log
 from app.config.config import Config
@@ -168,7 +166,7 @@ def generate_results(app):
 
                 # with open(f"{results_path}/{dist}_db.json", "w") as fd:
                 #     fd.write(json.dumps(data_ordered, indent=2) + "\n")
-    except (RebuilderExceptionDist, FileNotFoundError, ValueError, sqlalchemy.exc.SQLAlchemyError) as e:
+    except (RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
         raise RebuilderException("{}: failed to generate status.".format(str(e)))
 
 
