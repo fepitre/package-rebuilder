@@ -67,7 +67,8 @@ def parse_deb_buildinfo_fname(buildinfo):
 
 def rebuild_task_parser(task):
     parsed_task = None
-    if task["status"] == 'SUCCESS' and task["result"].get("rebuild", None):
+    if task["status"] == 'SUCCESS' and isinstance(task["result"], dict)\
+            and task["result"].get("rebuild", None):
         parsed_task = task["result"]["rebuild"]
     elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
             and task["result"]["exc_type"] == "RebuilderExceptionBuild":
