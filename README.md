@@ -342,7 +342,7 @@ deb intoto://ftp.fr.debian.org/debian-security bullseye-security main contrib no
 Please note that there is currently an issue in replacing `intoto` for `https` mirrors only
 (see https://github.com/in-toto/apt-transport-in-toto/issues/34). Ensure to have a supported `http` mirror selected.
 
-### DYI `root.layout`
+### DYO `root.layout`
 If doing on your own the `root.layout` file, `signatures` section and `keys` are empty. Before signing the
 whole file, you need to provide `keys` sections. For that you can use the following command:
 ```
