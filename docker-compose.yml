@@ -21,7 +21,7 @@ services:
   backend:
     restart: always
 # 'docker.io/mongo'
-    image: 'docker.io/mongo'
+    image: 'docker.io/mongo:4.4.8'
     ports:
       - '27017:27017'
     volumes:
