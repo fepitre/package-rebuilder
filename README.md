@@ -96,7 +96,7 @@ $ systemctl daemon-reload
 
 Create the following folders:
 ```
-$ mkdir -p /var/lib/rebuilder/{rebuild,broker,db,ssh,gnupg}
+$ mkdir -p /var/lib/rebuilder/{rebuild,broker,backend,ssh,gnupg}
 ```
 
 The previously created folders are mounted differently into containers to store or share persistent data
@@ -109,7 +109,7 @@ For example, here is the one used by `notset-rebuilder`:
 ```ini
 [DEFAULT]
 broker = redis://broker:6379/0
-backend = db+sqlite:////db/results.sqlite
+backend = mongodb://backend:27017
 snapshot = http://debian.notset.fr/snapshot
 
 # Scheduled task period for fetching latest buildinfo files
@@ -129,9 +129,8 @@ dist = qubes-4.1-vm-bullseye.amd64 qubes-4.1-vm-bullseye.all unstable+essential+
 ```
 In the current `docker` setup, you only need to adjust `in-toto-sign-key-fpr`, `repo-ssh-key`, `repo-remote-ssh-host`
 and `repo-remote-ssh-basedir` values. Here `schedule` value is the time in second for which `get` task will be
-run periodically. Default here is `30 minutes`. Please note that values for `broker` and `mongodb` variables refers
-to `docker` containers `broker` and `db` defined in `docker-compose.yml`. If you would like to change the `db` container
-name in `docker-compose.yml`, say `myrebuilddb`, you would have to set `mongodb = mongodb://myrebuilddb:27017/`.
+run periodically. Default here is `30 minutes`. Please note that values for `broker` and `backend` variables refers
+to `docker` containers `broker` and `backend` defined in `docker-compose.yml`.
 
 You can now enable and start the service:
 ```

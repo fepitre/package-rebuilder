@@ -25,7 +25,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - '/var/lib/rebuilder/db:/data/db'
+      - '/var/lib/rebuilder/backend:/data/db'
     command: --quiet
 
   beat:
