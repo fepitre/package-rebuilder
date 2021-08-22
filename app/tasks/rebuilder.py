@@ -163,6 +163,7 @@ def generate_results(app):
                 ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
                 fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png")
+                plt.close(fig)
 
                 # with open(f"{results_path}/{dist}_db.json", "w") as fd:
                 #     fd.write(json.dumps(data_ordered, indent=2) + "\n")
