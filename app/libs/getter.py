@@ -73,8 +73,8 @@ def rebuild_task_parser(task):
     elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
             and task["result"]["exc_type"] == "RebuilderExceptionBuild":
         # We have stored package info in exception
-        parsed_task = task["result"]["exc_message"][0]
-        parsed_task["status"] = task["status"].lower()
+        parsed_task = [task["result"]["exc_message"][0]]
+        parsed_task[0]["status"] = task["status"].lower()
     return parsed_task
 
 
@@ -84,8 +84,9 @@ def get_rebuilt_packages(app):
     for task in tasks:
         parsed_task = rebuild_task_parser(task)
         if parsed_task:
-            package = BuildPackage.from_dict(parsed_task)
-            parsed_packages.append(package)
+            for p in parsed_task:
+                package = BuildPackage.from_dict(p)
+                parsed_packages.append(package)
     return parsed_packages
 
 
@@ -124,9 +125,11 @@ class RebuilderDist:
 
 
 class BuildPackage(dict):
-    def __init__(self, name, epoch, version, arch, dist, url, status="", log="", retries=0):
+    def __init__(self, name, epoch, version, arch, dist, url,
+                 artifacts="", status="", log="", retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
-                      dist=dist, url=url, status=status, log=log, retries=retries)
+                      dist=dist, url=url, artifacts=artifacts, status=status,
+                      log=log, retries=retries)
 
     def __getattr__(self, item):
         return self[item]

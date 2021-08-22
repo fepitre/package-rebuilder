@@ -39,5 +39,5 @@ class RebuilderExceptionBuild(RebuilderException):
     pass
 
 
-class RebuilderExceptionRecord(RebuilderException):
+class RebuilderExceptionAttest(RebuilderException):
     pass

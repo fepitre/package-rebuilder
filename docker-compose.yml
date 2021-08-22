@@ -73,6 +73,8 @@ services:
     image: 'rebuilder_base'
     volumes:
       - .:/app
+# uploader worker needs in-toto directory for checking if metadata exists
+      - '/var/lib/rebuilder/rebuild:/rebuild'
     depends_on:
       - broker
       - backend
@@ -93,9 +95,8 @@ services:
       dockerfile: rebuilder.Dockerfile
     volumes:
       - .:/app
-# rebuilder worker(s) need(s) artifacts directory and GPG for signing in-toto metadata
-      - '/var/lib/rebuilder/rebuild:/rebuild'
-      - '/var/lib/rebuilder/gnupg:/root/.gnupg'
+# rebuilder worker(s) need(s) artifacts directory
+      - '/var/lib/rebuilder/artifacts:/artifacts'
     depends_on:
       - broker
       - backend
@@ -112,12 +113,37 @@ services:
 #      mode: replicated
 #      replicas: 2
 
+  attester:
+    restart: always
+    privileged: true
+    build:
+      context: .
+      dockerfile: rebuilder.Dockerfile
+    volumes:
+      - .:/app
+# attester need artifacts directory, in-toto repository and GPG for signing in-toto metadata
+      - '/var/lib/rebuilder/artifacts:/artifacts'
+      - '/var/lib/rebuilder/rebuild:/rebuild'
+      - '/var/lib/rebuilder/gnupg:/root/.gnupg'
+    depends_on:
+      - broker
+      - backend
+    links:
+      - broker
+      - backend
+    environment:
+      - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_RESULT_BACKEND=mongodb://backend:27017
+# https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
+    entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=attest
+
   uploader:
     restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# uploader worker needs artifacts directory and SSH key for rsyncing on remote location
+# uploader worker needs artifacts, in-toto directory and SSH key for rsyncing on remote location
+      - '/var/lib/rebuilder/artifacts:/artifacts'
       - '/var/lib/rebuilder/rebuild:/rebuild'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
     depends_on:

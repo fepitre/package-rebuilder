@@ -23,20 +23,26 @@ import os
 import requests
 import base64
 import json
+import glob
+import shutil
+import debian.deb822
 
 from app.celery import app
 from app.libs.logger import log
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, \
-    RebuilderExceptionDist, RebuilderException
+    RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderException
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
 from app.libs.rebuilder import getRebuilder
+from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
 
 
 class RebuilderTask(celery.Task):
     autoretry_for = (RebuilderExceptionBuild,)
     max_retries = Config['max_retries']
+
+# TODO: improve serialize/deserialize Package
 
 
 def get_celery_queued_tasks(queue_name):
@@ -180,7 +186,7 @@ def setup_periodic_tasks(sender, **kwargs):
 
 @app.task(base=RebuilderTask)
 def get(dist):
-    result = {"get": []}
+    result = {}
     if dist in get_celery_queued_tasks("get"):
         log.debug(f"{dist}: already submitted. Skipping.")
     else:
@@ -211,11 +217,21 @@ def get(dist):
                     log.debug(f"{package}: already submitted. Skipping.")
                     continue
                 if dict(package) not in get_celery_queued_tasks("rebuild"):
-                    log.debug(f"{package}: submitted for rebuild.")
-                    # Add rebuild task
-                    rebuild.delay(package)
-                    # For debug purposes
-                    result["get"].append(dict(package))
+                    metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
+                    metadata_unrepr = os.path.join(get_intoto_metadata_output_dir(package, unreproducible=True), 'metadata')
+                    if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
+                        log.debug(f"{package}: submitted for rebuild.")
+                        # Add rebuild task
+                        rebuild.delay(package)
+                        # For debug purposes
+                        result.setdefault("get", []).append(dict(package))
+                    else:
+                        if metadata:
+                            package.status = "reproducible"
+                        elif metadata_unrepr:
+                            package.status = "unreproducible"
+                        log.debug("{}: in-toto metadata already exists.".format(package))
+                        result.setdefault("rebuild", []).append(dict(package))
                 else:
                     log.debug(f"{package}: already submitted. Skipping.")
         except RebuilderExceptionDist:
@@ -227,47 +243,99 @@ def get(dist):
 
 @app.task(base=RebuilderTask)
 def rebuild(package):
-    # TODO: improve serialize/deserialize Package
     try:
         package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
-    builder = getRebuilder(
-        package=package,
-        snapshot_query_url=Config['snapshot'],
-        snapshot_mirror=Config['snapshot'],
-        sign_keyid=Config['sign_keyid']
-    )
-    metadata = os.path.join(builder.get_output_dir(), 'metadata')
-    metadata_unrepr = os.path.join(builder.get_output_dir(unreproducible=True), 'metadata')
-    if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
-        try:
-            package = builder.run()
-        except RebuilderExceptionBuild as e:
-            package, = e.args
-            # Ensure to keep a trace of retries for backend
-            package["retries"] = rebuild.request.retries
-            raise RebuilderExceptionBuild(package)
-    else:
-        if metadata:
-            package.status = "reproducible"
-        elif metadata_unrepr:
-            package.status = "unreproducible"
-        log.debug("{}: in-toto metadata already exists.".format(package))
+    try:
+        builder = getRebuilder(
+            package=package,
+            snapshot_query_url=Config['snapshot'],
+            snapshot_mirror=Config['snapshot']
+        )
+        package = builder.run()
+    except RebuilderExceptionBuild as e:
+        args, = e.args
+        package = args[0]
+        # Ensure to keep a trace of retries for backend
+        package["retries"] = rebuild.request.retries
+        upload.delay(package)
+        raise RebuilderExceptionBuild(package)
+    attest.delay(package)
+    result = {"rebuild": [dict(package)]}
+    return result
+
+
+@app.task(base=RebuilderTask)
+def attest(package):
+    try:
+        package = BuildPackage.from_dict(package)
+    except KeyError as e:
+        log.error("Failed to parse package.")
+        raise RebuilderExceptionAttest from e
+
+    if package.status not in ("reproducible", "unreproducible"):
+        raise RebuilderExceptionAttest(f"Cannot determine package status for {package}")
+
+    os.chdir(package.artifacts)
+    buildinfo = glob.glob(f"{package.name}*.buildinfo")
+    if not buildinfo:
+        raise RebuilderExceptionAttest(f"Cannot find buildinfo for {package}")
+    buildinfo = buildinfo[0]
+    with open(buildinfo) as fd:
+        parsed_buildinfo = debian.deb822.BuildInfo(fd)
+
+    # generate in-toto metadata
+    generate_intoto_metadata(package.artifacts, Config['sign_keyid'], parsed_buildinfo)
+    link = glob.glob("rebuild*.link")
+    if not link:
+        raise RebuilderExceptionAttest(f"Cannot find link for {package}")
+    link = link[0]
+
+    # create final output directory
+    outputdir = get_intoto_metadata_output_dir(package, unreproducible=package.status == "unreproducible")
+    os.makedirs(outputdir, exist_ok=True)
+    shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
+    shutil.copy2(os.path.join(package.artifacts, link), outputdir)
+
+    # create symlink to new buildinfo and rebuild link file
+    os.chdir(outputdir)
+    os.symlink(buildinfo, "buildinfo")
+    os.symlink(link, "metadata")
+
+    os.chdir(os.path.join(outputdir, '../../'))
+    for binpkg in parsed_buildinfo.get_binary():
+        if not os.path.exists(binpkg):
+            os.symlink(package.name, binpkg)
+
+    # remove artifacts
+    shutil.rmtree(package.artifacts)
+
     upload.delay(package)
-    result = {"rebuild": dict(package)}
+    result = {"attest": [dict(package)]}
     return result
 
 
 @app.task(base=RebuilderTask)
 def upload(package):
-    # TODO: improve serialize/deserialize Package
     try:
         package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
-        raise RebuilderExceptionBuild from e
+        raise RebuilderExceptionUpload from e
+
+    # collect log
+    builder = getRebuilder(package=package)
+    output_dir = f"/rebuild/{builder.distdir}"
+    if package.status == "reproducible":
+        log_dir = f"{output_dir}/log-ok"
+    elif package.status == "unreproducible":
+        log_dir = f"{output_dir}/log-ok-unreproducible"
+    else:
+        log_dir = f"{output_dir}/log-fail"
+    os.makedirs(log_dir, exist_ok=True)
+    shutil.move(package.log, f"{log_dir}/{os.path.basename(package.log)}")
 
     # generate plots from results
     try:
@@ -306,5 +374,5 @@ def upload(package):
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
         log.error(str(e))
         raise RebuilderExceptionUpload("Failed to upload")
-    result = {"upload": dict(package)}
+    result = {"upload": [dict(package)]}
     return result
