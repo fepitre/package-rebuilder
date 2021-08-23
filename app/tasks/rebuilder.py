@@ -204,6 +204,20 @@ def get(dist):
                     log.debug(f"Nothing to build for package {name} ({dist})")
                     continue
                 package = packages[name][0]
+
+                # check if metadata exists
+                metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
+                metadata_unrepr = os.path.join(
+                    get_intoto_metadata_output_dir(package, unreproducible=True), 'metadata')
+                if os.path.exists(metadata):
+                    package.status = "reproducible"
+                elif os.path.exists(metadata_unrepr):
+                    package.status = "unreproducible"
+                if package.status in ("reproducible", "unreproducible"):
+                    log.debug("{}: in-toto metadata already exists.".format(package))
+                    result.setdefault("rebuild", []).append(dict(package))
+                    continue
+
                 # check if package has already been triggered for build
                 stored_package = None
                 for p in stored_packages:
@@ -216,22 +230,13 @@ def get(dist):
                 if stored_package and stored_package.status == "retry":
                     log.debug(f"{package}: already submitted. Skipping.")
                     continue
+
                 if dict(package) not in get_celery_queued_tasks("rebuild"):
-                    metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
-                    metadata_unrepr = os.path.join(get_intoto_metadata_output_dir(package, unreproducible=True), 'metadata')
-                    if not os.path.exists(metadata) and not os.path.exists(metadata_unrepr):
-                        log.debug(f"{package}: submitted for rebuild.")
-                        # Add rebuild task
-                        rebuild.delay(package)
-                        # For debug purposes
-                        result.setdefault("get", []).append(dict(package))
-                    else:
-                        if metadata:
-                            package.status = "reproducible"
-                        elif metadata_unrepr:
-                            package.status = "unreproducible"
-                        log.debug("{}: in-toto metadata already exists.".format(package))
-                        result.setdefault("rebuild", []).append(dict(package))
+                    log.debug(f"{package}: submitted for rebuild.")
+                    # Add rebuild task
+                    rebuild.delay(package)
+                    # For debug purposes
+                    result.setdefault("get", []).append(dict(package))
                 else:
                     log.debug(f"{package}: already submitted. Skipping.")
         except RebuilderExceptionDist:
