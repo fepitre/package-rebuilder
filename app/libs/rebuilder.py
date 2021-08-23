@@ -19,6 +19,7 @@
 #
 
 import os
+import shutil
 import subprocess
 import time
 import tempfile
@@ -59,10 +60,8 @@ class BaseRebuilder:
         self.logfile = f"{package}-{str(int(time.time()))}.log"
         self.artifacts_dir = "/artifacts"
 
-    def gen_temp_dir(self, dir):
-        os.makedirs(dir, exist_ok=True)
+    def gen_temp_dir(self):
         tempdir = tempfile.mkdtemp(
-            dir=dir,
             prefix=f"{self.package.name}-{self.package.version}",
         )
         return tempdir
@@ -111,7 +110,7 @@ class DebianRebuilder(BaseRebuilder):
 
     def run(self):
         try:
-            tempdir = self.gen_temp_dir(self.basedir)
+            tempdir = self.gen_temp_dir()
             result, build_cmd = self.debrebuild(tempdir)
 
             self.logfile = f'{self.basedir}/{self.logfile}'
@@ -119,7 +118,19 @@ class DebianRebuilder(BaseRebuilder):
             with open(self.logfile, 'wb') as fd:
                 fd.write(result.stdout)
 
-            self.package.artifacts = tempdir
+            # copy build files to artifacts dir: we expect build artifacts
+            # to be only files (.changes, .deb, .buildinfo, .tar.*)
+            # this is a workaround for:
+            # https://gitlab.mister-muffin.de/josch/mmdebstrap/issues/11#issuecomment-403
+            artifactsdir = os.path.join(self.basedir, os.path.basename(tempdir))
+            os.makedirs(artifactsdir)
+            for f in [os.path.join(tempdir, f)
+                      for f in os.listdir(tempdir)
+                      if os.path.isfile(os.path.join(tempdir, f))]:
+                shutil.copy2(f, artifactsdir)
+            if tempdir and os.path.exists(tempdir):
+                shutil.rmtree(tempdir)
+            self.package.artifacts = artifactsdir
 
             # This is for recording logfile entry into DB
             self.package.log = self.logfile
