@@ -105,6 +105,8 @@ def generate_results(app):
                         continue
                 data_ordered[x["name"]] = x
 
+            packages_list = dist.repo.get_buildpackages(dist.arch)
+
             for pkgset_name in dist.package_sets:
                 if dist.distribution == "debian":
                     url = f"https://jenkins.debian.net/userContent/reproducible/" \
@@ -118,12 +120,13 @@ def generate_results(app):
                         continue
                     content = resp.text.rstrip('\n').split('\n')
                 else:
-                    # fixme: for Qubes we need a list of packages
                     content = data_ordered.keys()
 
                 result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
                 for pkg_name in content:
-                    if data_ordered.get(pkg_name, {}).get('status', None):
+                    if pkg_name not in packages_list.keys():
+                        continue
+                    if data_ordered.get(pkg_name, {}) in packages_list[pkg_name]:
                         if data_ordered[pkg_name]["status"] == "reproducible":
                             result["repro"].append(pkg_name)
                         elif data_ordered[pkg_name]["status"] == "unreproducible":
