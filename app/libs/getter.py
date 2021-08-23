@@ -110,7 +110,7 @@ class RebuilderDist:
             self.repo = FedoraRepository(self.name)
             self.package_sets = []
             self.distribution = "fedora"
-        elif is_debian(dist):
+        elif is_debian(self.name):
             self.name, package_sets = "{}+".format(self.name).split('+', 1)
             self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
                                  if pkg_set]
