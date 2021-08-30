@@ -41,6 +41,8 @@ from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_outp
 class RebuilderTask(celery.Task):
     autoretry_for = (RebuilderExceptionBuild,)
     max_retries = Config['max_retries']
+    # Let snapshot service to get the latest data from official repositories
+    default_retry_delay = 60 * 60
 
 # TODO: improve serialize/deserialize Package
 
