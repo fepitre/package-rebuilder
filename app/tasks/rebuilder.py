@@ -219,7 +219,7 @@ def get(dist):
                 elif os.path.exists(metadata_unrepr):
                     package.status = "unreproducible"
                 if package.status in ("reproducible", "unreproducible"):
-                    log.debug("{}: in-toto metadata already exists.".format(package))
+                    log.debug(f"{package}: already built ({package.status}). Skipping")
                     result.setdefault("rebuild", []).append(dict(package))
                     continue
 
