@@ -309,8 +309,10 @@ def attest(package):
 
     # create symlink to new buildinfo and rebuild link file
     os.chdir(outputdir)
-    os.symlink(buildinfo, "buildinfo")
-    os.symlink(link, "metadata")
+    if not os.path.exists("buildinfo"):
+        os.symlink(buildinfo, "buildinfo")
+    if not os.path.exists("metadata"):
+        os.symlink(link, "metadata")
 
     os.chdir(os.path.join(outputdir, '../../'))
     for binpkg in parsed_buildinfo.get_binary():
@@ -343,7 +345,9 @@ def upload(package):
     else:
         log_dir = f"{output_dir}/log-fail"
     os.makedirs(log_dir, exist_ok=True)
-    shutil.move(package.log, f"{log_dir}/{os.path.basename(package.log)}")
+    dst_log = f"{log_dir}/{os.path.basename(package.log)}"
+    if not os.path.exists(dst_log):
+        shutil.move(package.log, dst_log)
 
     # generate plots from results
     try:
