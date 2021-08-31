@@ -79,9 +79,9 @@ class DebianRebuilder(BaseRebuilder):
         self.distdir = f"debian"
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"
         self.snapshot_query_url = kwargs.get(
-            'snapshot_query_url', 'http://debian.notset.fr/snapshot')
+            'snapshot_query_url', 'http://snapshot.notset.fr')
         self.snapshot_mirror = kwargs.get(
-            'snapshot_mirror', "http://debian.notset.fr/snapshot")
+            'snapshot_mirror', "http://snapshot.notset.fr")
         self.extra_build_args = None
 
     def debrebuild(self, tempdir):

@@ -40,7 +40,7 @@ if 'CELERY_BROKER_URL' in os.environ:
 if 'CELERY_RESULT_BACKEND' in os.environ:
     broker = os.environ['CELERY_RESULT_BACKEND']
 
-snapshot = config.get('DEFAULT', 'snapshot', fallback='http://debian.notset.fr/snapshot')
+snapshot = config.get('DEFAULT', 'snapshot', fallback='http://snapshot.notset.fr')
 
 try:
     schedule = int(config.get('DEFAULT', 'schedule', fallback=DEFAULT_SCHEDULE))

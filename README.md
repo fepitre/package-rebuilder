@@ -110,7 +110,7 @@ For example, here is the one used by `notset-rebuilder`:
 [DEFAULT]
 broker = redis://broker:6379/0
 backend = mongodb://backend:27017
-snapshot = http://debian.notset.fr/snapshot
+snapshot = http://snapshot.notset.fr
 
 # Scheduled task period for fetching latest buildinfo files
 schedule = 1800
