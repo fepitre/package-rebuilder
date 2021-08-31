@@ -171,6 +171,19 @@ class DebianRepository:
         except (ValueError, FileNotFoundError) as e:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
 
+    def get_packages_set(self, pkgset_name):
+        packages = []
+        url = f"https://jenkins.debian.net/userContent/reproducible/" \
+              f"debian/pkg-sets/{self.dist}/{pkgset_name}.pkgset"
+        try:
+            resp = requests.get(url)
+            if resp.ok:
+                content = resp.text.rstrip('\n').split('\n')
+                packages = set(sorted(content))
+        except requests.exceptions.ConnectionError as e:
+            log.error(f"Failed to get {pkgset_name}: {str(e)}")
+        return packages
+
     def get_buildinfos(self, arch):
         files = []
         url = f"https://buildinfos.debian.net/buildinfo-pool_{self.dist}_{arch}.list"
@@ -185,17 +198,7 @@ class DebianRepository:
 
         filtered_packages = []
         for pkgset_name in self.package_sets:
-            url = f"https://jenkins.debian.net/userContent/reproducible/" \
-                  f"debian/pkg-sets/{self.dist}/{pkgset_name}.pkgset"
-            try:
-                resp = requests.get(url)
-                if not resp.ok:
-                    continue
-            except requests.exceptions.ConnectionError as e:
-                log.error(f"Failed to get {pkgset_name}: {str(e)}")
-                continue
-            content = resp.text.rstrip('\n').split('\n')
-            filtered_packages += content
+            filtered_packages += self.get_packages_set(pkgset_name)
         filtered_packages = set(sorted(filtered_packages))
 
         for buildinfo in buildinfo_pool:
@@ -229,8 +232,7 @@ class DebianRepository:
             )
             packages[parsed_bn['name']].append(rebuild)
         for pkg in packages.keys():
-            packages[pkg].sort(
-                key=lambda pkg: parse_version(pkg.version), reverse=True)
+            packages[pkg].sort(key=lambda pkg: parse_version(pkg.version), reverse=True)
         return packages
 
 

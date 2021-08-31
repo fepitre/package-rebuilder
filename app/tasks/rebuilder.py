@@ -20,7 +20,6 @@
 import celery.bootsteps
 import subprocess
 import os
-import requests
 import base64
 import json
 import glob
@@ -36,6 +35,7 @@ from app.libs.exceptions import RebuilderExceptionGet, \
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
 from app.libs.rebuilder import getRebuilder
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
+from app.libs.reporter import generate_results
 
 
 class RebuilderTask(celery.Task):
@@ -79,107 +79,6 @@ def get_celery_active_tasks():
                 if task.get('args'):
                     tasks.append(task['args'][0])
     return tasks
-
-
-def generate_results(app):
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    from packaging.version import parse as parse_version
-
-    def func(pct, allvals):
-        absolute = round(pct / 100. * np.sum(allvals))
-        return "{:.1f}%\n({:d})".format(pct, absolute)
-
-    results = get_rebuilt_packages(app)
-    try:
-        for dist in Config['dist'].split():
-            dist = RebuilderDist(dist)
-            results_path = f"/rebuild/{dist.distribution}/results"
-            os.makedirs(results_path, exist_ok=True)
-
-            data_dist = [x for x in results if x['dist'] == dist.name and x['arch'] == dist.arch]
-            data_ordered = {}
-            for x in data_dist:
-                if data_ordered.get(x["name"], None):
-                    if parse_version(x["version"]) <= parse_version(
-                            data_ordered[x["name"]]["version"]):
-                        continue
-                data_ordered[x["name"]] = x
-
-            packages_list = dist.repo.get_buildpackages(dist.arch)
-
-            for pkgset_name in dist.package_sets:
-                if dist.distribution == "debian":
-                    url = f"https://jenkins.debian.net/userContent/reproducible/" \
-                          f"debian/pkg-sets/{dist.name}/{pkgset_name}.pkgset"
-                    try:
-                        resp = requests.get(url)
-                        if not resp.ok:
-                            continue
-                    except requests.exceptions.ConnectionError as e:
-                        log.error(f"Failed to get {pkgset_name}: {str(e)}")
-                        continue
-                    content = resp.text.rstrip('\n').split('\n')
-                else:
-                    content = data_ordered.keys()
-
-                result = {"repro": [], "unrepro": [], "fail": [], "pending": []}
-                for pkg_name in content:
-                    if pkg_name not in packages_list.keys():
-                        continue
-                    if data_ordered.get(pkg_name, {}) in packages_list[pkg_name]:
-                        if data_ordered[pkg_name]["status"] == "reproducible":
-                            result["repro"].append(pkg_name)
-                        elif data_ordered[pkg_name]["status"] == "unreproducible":
-                            result["unrepro"].append(pkg_name)
-                        elif data_ordered[pkg_name]["status"] == "failure":
-                            result["fail"].append(pkg_name)
-                        elif data_ordered[pkg_name]["status"] == "retry":
-                            result["pending"].append(pkg_name)
-                    else:
-                        result["pending"].append(pkg_name)
-
-                x = []
-                legends = []
-                explode = []
-                colors = []
-                if result["repro"]:
-                    count = len(result["repro"])
-                    x.append(count)
-                    legends.append(f"Reproducible")
-                    colors.append("green")
-                    explode.append(0)
-                if result["unrepro"]:
-                    count = len(result["unrepro"])
-                    x.append(count)
-                    legends.append(f"Unreproducible")
-                    colors.append("orange")
-                    explode.append(0)
-                if result["fail"]:
-                    count = len(result["fail"])
-                    x.append(count)
-                    legends.append(f"Failed")
-                    colors.append("red")
-                    explode.append(0)
-                if result["pending"]:
-                    count = len(result["pending"])
-                    x.append(count)
-                    legends.append(f"Pending")
-                    colors.append("grey")
-                    explode.append(0)
-
-                fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
-                wedges, texts, autotexts = ax.pie(x, colors=colors, explode=explode, autopct=lambda pct: func(pct, x), shadow=True, startangle=90, normalize=True)
-                ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
-                ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
-                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png")
-                plt.close(fig)
-
-                # with open(f"{results_path}/{dist}_db.json", "w") as fd:
-                #     fd.write(json.dumps(data_ordered, indent=2) + "\n")
-    except (RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
-        raise RebuilderException("{}: failed to generate status.".format(str(e)))
 
 
 @app.on_after_finalize.connect
