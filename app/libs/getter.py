@@ -103,7 +103,7 @@ class RebuilderDist:
             raise RebuilderExceptionDist(f"Cannot parse dist: {dist}.")
 
         if is_qubes(dist):
-            self.repo = QubesRepository(self.name)
+            self.repo = QubesRepository(self.name, self.arch)
             self.package_sets = ["full"]
             self.distribution = "qubes"
         elif is_fedora(dist):
@@ -114,8 +114,11 @@ class RebuilderDist:
             self.name, package_sets = "{}+".format(self.name).split('+', 1)
             self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
                                  if pkg_set]
+            # If no package set is provided, we understand it as "all"
+            if not self.package_sets:
+                self.package_sets = ["all"]
             self.distribution = "debian"
-            self.repo = DebianRepository(self.name, self.package_sets)
+            self.repo = DebianRepository(self.name, self.arch, self.package_sets)
         else:
             raise RebuilderExceptionDist(f"Unsupported distribution: {dist}")
 
@@ -157,21 +160,21 @@ class FedoraRepository:
 
 
 class DebianRepository:
-    def __init__(self, dist, package_sets):
+    def __init__(self, dist, arch, package_sets):
         self.dist = dist
+        self.arch = DEBIAN_ARCHES.get(arch, arch)
         self.package_sets = package_sets
+        self.packages = None
         try:
             if is_debian(self.dist):
-                if not debian:
-                    raise RebuilderExceptionGet(
-                        "Cannot build {}: python-debian not found".format(dist))
+                if debian is None:
+                    raise RebuilderExceptionGet(f"Cannot build {self.dist}: python-debian not found")
             else:
-                raise RebuilderExceptionGet(
-                    "Unknown dist: {}".format(self.dist))
+                raise RebuilderExceptionGet(f"Unknown dist: {self.dist}")
         except (ValueError, FileNotFoundError) as e:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
 
-    def get_packages_set(self, pkgset_name):
+    def get_package_names_in_debian_set(self, pkgset_name):
         packages = []
         url = f"https://jenkins.debian.net/userContent/reproducible/" \
               f"debian/pkg-sets/{self.dist}/{pkgset_name}.pkgset"
@@ -184,7 +187,7 @@ class DebianRepository:
             log.error(f"Failed to get {pkgset_name}: {str(e)}")
         return packages
 
-    def get_buildinfos(self, arch):
+    def get_buildinfo_files(self, arch):
         files = []
         url = f"https://buildinfos.debian.net/buildinfo-pool_{self.dist}_{arch}.list"
         try:
@@ -195,51 +198,67 @@ class DebianRepository:
             return files
 
         buildinfo_pool = resp.text.rstrip('\n').split('\n')
-
-        filtered_packages = []
-        for pkgset_name in self.package_sets:
-            filtered_packages += self.get_packages_set(pkgset_name)
-        filtered_packages = set(sorted(filtered_packages))
-
         for buildinfo in buildinfo_pool:
-            if filtered_packages and buildinfo.split('/')[-1].split('_')[0] \
-                    not in filtered_packages:
-                continue
             files.append(f"https://buildinfos.debian.net{buildinfo}")
         return files
 
-    def get_buildpackages(self, arch):
+    def get_packages(self):
         packages = {}
-        arch = DEBIAN_ARCHES.get(arch, arch)
-        for f in self.get_buildinfos(arch):
+        latest_packages = []
+        for f in self.get_buildinfo_files(self.arch):
             parsed_bn = parse_deb_buildinfo_fname(f)
             if not parsed_bn:
                 continue
-            if not packages.get(parsed_bn['name'], []):
+            if not packages.get(parsed_bn['name'], None):
                 packages[parsed_bn['name']] = []
-            # WIP: Ignore buildinfo having e.g. amd64-source?
+            # fixme: ignore buildinfo having e.g. amd64-source?
             if len(parsed_bn['arch']) > 1:
                 continue
-            if parsed_bn['arch'][0] != arch:
+            if parsed_bn['arch'][0] != self.arch:
                 continue
             rebuild = BuildPackage(
                 name=parsed_bn['name'],
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],
-                arch=arch,
+                arch=self.arch,
                 dist=self.dist,
                 url=f
             )
             packages[parsed_bn['name']].append(rebuild)
         for pkg in packages.keys():
             packages[pkg].sort(key=lambda pkg: parse_version(pkg.version), reverse=True)
-        return packages
+            if packages[pkg]:
+                latest_packages.append(packages[pkg][0])
+        self.packages = latest_packages
+        return self.packages
+
+    def get_packages_to_rebuild(self, package_set=None):
+        if not self.packages:
+            self.packages = self.get_packages()
+        packages_to_rebuild = []
+        filtered_package_names = []
+        if package_set:
+            package_sets = [package_set]
+        else:
+            package_sets = self.package_sets
+        if "all" not in package_sets:
+            for pkgset_name in package_sets:
+                filtered_package_names += self.get_package_names_in_debian_set(pkgset_name)
+            filtered_package_names = set(sorted(filtered_package_names))
+            for package in self.packages:
+                if package.name in filtered_package_names:
+                    packages_to_rebuild.append(package)
+        else:
+            packages_to_rebuild = self.packages
+        return packages_to_rebuild
 
 
 class QubesRepository:
-    def __init__(self, qubes_dist):
+    def __init__(self, qubes_dist, arch):
         self.qubes_dist = qubes_dist
         self.dist = None
+        self.arch = arch
+        self.packages = None
         try:
             self.release, self.package_set, self.dist = \
                 qubes_dist.lstrip('qubes-').split('-', 2)
@@ -271,7 +290,7 @@ class QubesRepository:
             files.append(line[-1])
         return files
 
-    def get_buildinfos(self):
+    def get_buildinfo_files(self):
         files = []
         qubes_rsync_baseurl = "rsync://ftp.qubes-os.org/qubes-mirror/repo"
         try:
@@ -302,14 +321,15 @@ class QubesRepository:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
         return files
 
-    def get_buildpackages(self, arch):
+    def get_packages(self):
         packages = {}
-        for f in self.get_buildinfos():
+        latest_packages = []
+        for f in self.get_buildinfo_files():
             if is_fedora(self.dist):
                 parsed_bn = parse_rpm_buildinfo_fname(f)
                 if not parsed_bn:
                     continue
-                if parsed_bn['arch'] not in ("noarch", arch):
+                if parsed_bn['arch'] not in ("noarch", self.arch):
                     continue
             elif is_debian(self.dist):
                 parsed_bn = parse_deb_buildinfo_fname(f)
@@ -317,8 +337,8 @@ class QubesRepository:
                     continue
                 if len(parsed_bn['arch']) > 1:
                     continue
-                arch = DEBIAN_ARCHES.get(arch, arch)
-                if parsed_bn['arch'][0] != arch:
+                self.arch = DEBIAN_ARCHES.get(self.arch, self.arch)
+                if parsed_bn['arch'][0] != self.arch:
                     continue
                 if '+deb{}u'.format(DEBIAN.get(self.dist)) not in \
                         parsed_bn['version']:
@@ -331,12 +351,17 @@ class QubesRepository:
                 name=parsed_bn['name'],
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],
-                arch=arch,
+                arch=self.arch,
                 dist=self.qubes_dist,
                 url=f,
             )
             packages[parsed_bn['name']].append(rebuild)
         for pkg in packages.keys():
-            packages[pkg].sort(
-                key=lambda pkg: parse_version(pkg.version), reverse=True)
-        return packages
+            packages[pkg].sort(key=lambda pkg: parse_version(pkg.version), reverse=True)
+            latest_packages.append(packages[pkg][0])
+        return latest_packages
+
+    def get_packages_to_rebuild(self, package_set=None):
+        if not self.packages:
+            self.packages = self.get_packages()
+        return self.packages

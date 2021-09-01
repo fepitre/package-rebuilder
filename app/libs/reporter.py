@@ -87,45 +87,39 @@ def generate_results(app):
                 latest_results[r["name"]] = r
 
             # Get BuildPackages that go into rebuild
-            packages_list = dist.repo.get_buildpackages(dist.arch)
+            dist.repo.get_packages()
 
             # Filter results per status on every package sets
             for pkgset_name in dist.package_sets:
-                # Get packages in a given set
-                if dist.distribution == "debian":
-                    packages_in_set = dist.repo.get_packages_set(pkgset_name)
-                else:
-                    packages_in_set = latest_results.keys()
+                packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
 
                 # Prepare the result data
                 result = {"reproducible": [], "unreproducible": [], "failure": [], "pending": []}
                 html_summary[pkgset_name] = []
-                for pkg_name in packages_in_set:
-                    if pkg_name not in packages_list.keys():
-                        continue
-                    if latest_results.get(pkg_name, {}) in packages_list[pkg_name]:
-                        pkg = latest_results[pkg_name]
-                        if latest_results[pkg_name]["status"] == "reproducible":
+                for package in packages_to_rebuild:
+                    if latest_results.get(package.name, {}):
+                        pkg = latest_results[package.name]
+                        if latest_results[package.name]["status"] == "reproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-success-success"
                             if pkg["log"]:
                                 pkg["log"] = f'../log-ok/{os.path.basename(pkg["log"])}'
                             result["reproducible"].append(pkg)
-                        elif latest_results[pkg_name]["status"] == "unreproducible":
+                        elif latest_results[package.name]["status"] == "unreproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-unreproducible-yellow"
                             if pkg["log"]:
                                 pkg["log"] = f'../log-ok-unreproducible/{os.path.basename(pkg["log"])}'
                             result["unreproducible"].append(pkg)
-                        elif latest_results[pkg_name]["status"] == "failure":
+                        elif latest_results[package.name]["status"] == "failure":
                             pkg["badge"] = "https://img.shields.io/badge/-failure-red"
                             if pkg["log"]:
                                 pkg["log"] = f'../log-fail/{os.path.basename(pkg["log"])}'
                             result["failure"].append(pkg)
-                        elif latest_results[pkg_name]["status"] == "retry":
+                        elif latest_results[package.name]["status"] == "retry":
                             pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
                             pkg["status"] = "pending"
                             result["pending"].append(pkg)
                     else:
-                        pkg = packages_list[pkg_name][0]
+                        pkg = package
                         pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
                         result["pending"].append(pkg)
 

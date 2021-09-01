@@ -96,19 +96,14 @@ def get(dist):
     else:
         try:
             dist = RebuilderDist(dist)
-            packages = dist.repo.get_buildpackages(dist.arch)
+            packages = dist.repo.get_packages_to_rebuild()
             if not packages:
                 log.debug(f"No packages found for {dist}")
 
             # get previous triggered packages builds
             stored_packages = get_rebuilt_packages(app)
 
-            for name in packages.keys():
-                if not packages[name]:
-                    log.debug(f"Nothing to build for package {name} ({dist})")
-                    continue
-                package = packages[name][0]
-
+            for package in packages:
                 # check if metadata exists
                 metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
                 metadata_unrepr = os.path.join(
