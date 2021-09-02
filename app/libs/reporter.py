@@ -174,5 +174,5 @@ def generate_results(app):
             with open(f"{results_path}/{dist.name}.{dist.arch}.html", 'w') as fd:
                 fd.write(HTML_TEMPLATE.render(**data))
 
-    except (RebuilderExceptionDist, FileNotFoundError, ValueError) as e:
+    except Exception as e:
         raise RebuilderException("{}: failed to generate status.".format(str(e)))

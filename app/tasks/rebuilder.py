@@ -39,7 +39,7 @@ from app.libs.reporter import generate_results
 
 
 class RebuilderTask(celery.Task):
-    autoretry_for = (RebuilderExceptionBuild,)
+    autoretry_for = (RebuilderExceptionBuild, RebuilderExceptionUpload)
     max_retries = Config['max_retries']
     # Let snapshot service to get the latest data from official repositories
     default_retry_delay = 60 * 60
