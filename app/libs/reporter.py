@@ -37,19 +37,20 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
   <title>{{dist}} rebuild status</title>
   <style>
   body { font-family: sans-serif; }
-  td, th { border: solid 2px #dcdcdc; padding: 4px; }
-  table { border-collapse: collapse; }
+  td, th { border: solid 2px darkgrey; padding: 2px; }
+  table { border-collapse: collapse; width: 50%;}
   </style>
 </head>
 <body>
-
 <h1 id="dist">{{dist}}</h1>
-
-{%- for package_set, packages in summary.items() -%}
+<table>
+{%- for package_set in packages.keys() -%}<img src="{{plots[package_set]}}"/></a>{{ '<br>' if loop.index % 2 == 0 }}{%- endfor %}
+</table>
+{%- for package_set, pkg_list in packages.items() -%}
 <h3 id="{{package_set}}">{{package_set}}</h3>
 <tbody>
 <table>
-{%- for pkg in packages %}
+{%- for pkg in pkg_list %}
 <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log']}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
 {%- endfor %}
 </table>
@@ -66,7 +67,6 @@ def func(pct, allvals):
 
 
 def generate_results(app):
-    html_summary = {}
     rebuild_results = get_rebuilt_packages(app)
     try:
         for dist in Config['dist'].split():
@@ -89,13 +89,15 @@ def generate_results(app):
             # Get BuildPackages that go into rebuild
             dist.repo.get_packages()
 
+            packages_list = {}
+            plots = {}
             # Filter results per status on every package sets
             for pkgset_name in dist.package_sets:
                 packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
 
                 # Prepare the result data
                 result = {"reproducible": [], "unreproducible": [], "failure": [], "pending": []}
-                html_summary[pkgset_name] = []
+                packages_list[pkgset_name] = []
                 for package in packages_to_rebuild:
                     if latest_results.get(package.name, {}):
                         pkg = latest_results[package.name]
@@ -125,7 +127,7 @@ def generate_results(app):
 
                 # We simplify how we render HTML
                 for packages in result.values():
-                    html_summary[pkgset_name] += packages
+                    packages_list[pkgset_name] += packages
 
                 x = []
                 legends = []
@@ -160,13 +162,15 @@ def generate_results(app):
                 wedges, texts, autotexts = ax.pie(x, colors=colors, explode=explode, autopct=lambda pct: func(pct, x), shadow=True, startangle=90, normalize=True)
                 ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
-                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png")
+                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png", bbox_inches='tight')
                 plt.close(fig)
+
+                plots[pkgset_name] = f"{dist.name}_{pkgset_name}.{dist.arch}.png"
 
                 # with open(f"{results_path}/{dist}_db.json", "w") as fd:
                 #     fd.write(json.dumps(latest_results, indent=2) + "\n")
 
-            data = {"dist": f"{dist.distribution} {dist.name} ({dist.arch})", "summary": html_summary}
+            data = {"dist": f"{dist.distribution} {dist.name} ({dist.arch})", "packages": packages_list, "plots": plots}
             with open(f"{results_path}/{dist.name}.{dist.arch}.html", 'w') as fd:
                 fd.write(HTML_TEMPLATE.render(**data))
 
