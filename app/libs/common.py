@@ -82,3 +82,14 @@ def get_backend_tasks(app):
             r[f] = value
         results.append(r)
     return results
+
+
+def delete_backend_tasks(app, status):
+    backend = app.backend
+    col = backend.collection.find()
+    results = []
+    for _, doc in enumerate(col):
+        if doc["status"] == status:
+            backend.collection.delete_one({"_id": doc["_id"]})
+            results.append(doc)
+    return results
