@@ -20,8 +20,6 @@
 import celery.bootsteps
 import subprocess
 import os
-import base64
-import json
 import glob
 import shutil
 import debian.deb822
@@ -32,6 +30,7 @@ from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderException
+from app.libs.common import get_celery_queued_tasks
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
 from app.libs.rebuilder import getRebuilder
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
@@ -46,29 +45,6 @@ class RebuilderTask(celery.Task):
     default_retry_delay = 60 * 60
 
 # TODO: improve serialize/deserialize Package
-
-
-def get_celery_queued_tasks(queue_name):
-    with app.pool.acquire(block=True) as conn:
-        if queue_name == "unacked":
-            tasks = conn.default_channel.client.hvals(queue_name)
-        else:
-            tasks = conn.default_channel.client.lrange(queue_name, 0, -1)
-
-    submitted_tasks = []
-    for task in tasks:
-        try:
-            if isinstance(task, bytes):
-                task = task.decode("utf-8")
-        except UnicodeDecodeError:
-            log.error("Failed to parse task")
-        j = json.loads(task)
-        if j and isinstance(j, list):
-            j = j[0]
-        body = json.loads(base64.b64decode(j['body']))
-        submitted_tasks.append(body[0][0])
-
-    return submitted_tasks
 
 
 def get_celery_active_tasks():
@@ -102,7 +78,7 @@ def setup_periodic_tasks(sender, **kwargs):
 @app.task(base=RebuilderTask)
 def get(dist):
     result = {}
-    if dist in get_celery_queued_tasks("get"):
+    if dist in get_celery_queued_tasks(app, "get"):
         log.debug(f"{dist}: already submitted. Skipping.")
     else:
         try:

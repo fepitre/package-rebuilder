@@ -19,6 +19,7 @@
 #
 
 import json
+import base64
 
 DEBIAN = {
     "buster": "10",
@@ -46,6 +47,26 @@ def is_fedora(dist):
 def is_debian(dist):
     dist, package_sets = f"{dist}+".split('+', 1)
     return DEBIAN.get(dist, None) is not None
+
+
+def get_celery_queued_tasks(app, queue_name):
+    with app.pool.acquire(block=True) as conn:
+        if queue_name == "unacked":
+            tasks = conn.default_channel.client.hvals(queue_name)
+        else:
+            tasks = conn.default_channel.client.lrange(queue_name, 0, -1)
+
+    submitted_tasks = []
+    for task in tasks:
+        if isinstance(task, bytes):
+            task = task.decode("utf-8")
+        j = json.loads(task)
+        if j and isinstance(j, list):
+            j = j[0]
+        body = json.loads(base64.b64decode(j['body']))
+        submitted_tasks.append(body[0][0])
+
+    return submitted_tasks
 
 
 def get_backend_tasks(app):
