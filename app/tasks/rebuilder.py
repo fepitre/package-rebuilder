@@ -76,7 +76,7 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 @app.task(base=RebuilderTask)
-def get(dist):
+def get(dist, force_retry=False):
     result = {}
     if dist in get_celery_queued_tasks(app, "get"):
         log.debug(f"{dist}: already submitted. Skipping.")
@@ -110,9 +110,13 @@ def get(dist):
                     if p == package:
                         stored_package = p
                         break
-                if stored_package and stored_package.status in ("reproducible", "unreproducible", "failure"):
+                if stored_package and stored_package.status in ("reproducible", "unreproducible"):
                     log.debug(f"{package}: already built ({stored_package.status}). Skipping")
                     continue
+                if stored_package and stored_package.status == "fail":
+                    if not force_retry:
+                        log.debug(f"{package}: already built ({stored_package.status}). Skipping")
+                        continue
                 if stored_package and stored_package.status == "retry":
                     log.debug(f"{package}: already submitted. Skipping.")
                     continue
