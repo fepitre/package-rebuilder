@@ -122,6 +122,8 @@ def generate_results(app):
                             result["pending"].append(pkg)
                     else:
                         pkg = package
+                        # On clean of FAILED tasks, previous info remains
+                        pkg["log"] = ""
                         pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
                         result["pending"].append(pkg)
 
