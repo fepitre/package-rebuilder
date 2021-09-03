@@ -9,29 +9,27 @@ expected until a proper stable release is made. For more information, don't hesi
 
 The current design of `PackageRebuilder` is based on individual tasks orchestrated with the help of `celery` engine
 (see https://docs.celeryproject.org/en/stable/). `celery` uses a `broker` to receive and distribute task in specific queues for
-which services `getter`, `rebuilder` and `uploader` are connected to. All the task results are stored in `backend`.
+which services `getter`, `rebuilder`, `uploader` and `attester` are connected to. All the task results are stored in `backend`.
 
 ```
-                                              .--------------.
-                                             .| getter       |
-        .--------------.                    / '--------------'
-        | broker       |.                  /
-        '--------------' \                /
-                          '--------------'    .--------------.
-                          | Orchestrator |----| rebuilder(s) |
-                          .--------------.    '--------------'
-        .--------------. /                \
-        | backend      |'                  \
-        '--------------'                    \ .--------------.
-                                             '| uploader     |
-                                              '--------------'
+                                           .-----------.
+                                          .| getter    |
+                                         / '-----------'
+        .---------.                     /
+        | broker  |----.               '      .-----------.
+        '---------'     '--------------. .----| uploader  |
+                        |              |'     '-----------'
+                        | orchestrator |
+                        |              |.     .-----------.
+        .---------.     .--------------. '----| attester  |
+        | backend |----'               '      '-----------'
+        '---------'                     \
+                                         \ .-----------.
+                                          '| rebuilder |
+                                           '-----------'
 ```
 
-The chosen `broker` here for `celery` is `redis` and the `backend` is `sqlalchemy` with `sqlite` as database engine.
-
-> Note: In the case of `celery` backend with `sqlite`, there is no particular Docker service running as database is
-> simply a file. For any other case like `postgresql`, `backend` service would be added in `docker-compose.yml` serving
-> `postgresql` server.
+The chosen `broker` here for `celery` is `redis` and the `backend` is `mongodb` as database engine.
 
 Each service is doing only tasks defined in separate queues defined as follows:
 
@@ -39,13 +37,15 @@ Each service is doing only tasks defined in separate queues defined as follows:
 |-----------|-----------|
 | getter | get |
 | rebuilder | rebuild |
+| attester | attest |
 | uploader | upload |
 
 The `getter` service is responsible to get the latest `buildinfo` on `Qubes OS` or `Debian` (soon `Fedora`) repositories
-and to add new `rebuild` tasks. Once a `rebuilder` has finished it adds a new `upload` task for
-`uploader`. Either on success or failure, a task result containing useful information about the build is
-created in `backend`. Notably, it contains all the information about a build, its status and
-the number of retries. In practice, you will only scale `rebuilder` service.
+and to add new `rebuild` tasks. Once a `rebuilder` has finished it adds a new `attest` task for `attester`. Then, `attester`
+will collect rebuild artifacts and generate `in-toto` metadata. Finally, `upload` task is triggered once metadata are generated.
+Either on success or failure, a task result containing useful information about the build is created in `backend`.
+Notably, it contains all the information about a build, its status and the number of retries. In practice, you will
+only scale `rebuilder` service.
 
 There exist two side services for `celery` which are `beat` and `flower`. The former holds the periodic task scheduling
 and the latter is useful for monitoring `celery` (see [flower](https://flower.readthedocs.io/en/latest/)). Notably, one
@@ -148,7 +148,7 @@ and `rsync` on the `rebuilder` machine then, in `/opt/rebuilder`, run:
 $ CELERY_BROKER_URL="redis://localhost:6379/0" ./init_feed.py
 ```
 
-> TODO: Add initial feed if `rebuild` queue is empty like.
+> TODO: Add initial feed if `rebuild` queue is empty.
 
 ## Check rebuild proofs before installing packages: apt-transport-in-toto
 
