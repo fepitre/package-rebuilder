@@ -117,7 +117,7 @@ def get(dist):
                     log.debug(f"{package}: already submitted. Skipping.")
                     continue
 
-                if dict(package) not in get_celery_queued_tasks("rebuild"):
+                if dict(package) not in get_celery_queued_tasks(app, "rebuild"):
                     log.debug(f"{package}: submitted for rebuild.")
                     # Add rebuild task
                     rebuild.delay(package)
