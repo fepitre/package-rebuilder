@@ -51,21 +51,29 @@ def is_debian(dist):
 
 def get_celery_queued_tasks(app, queue_name):
     with app.pool.acquire(block=True) as conn:
-        if queue_name == "unacked":
-            tasks = conn.default_channel.client.hvals(queue_name)
-        else:
-            tasks = conn.default_channel.client.lrange(queue_name, 0, -1)
+        tasks = conn.default_channel.client.lrange(queue_name, 0, -1)
 
     submitted_tasks = []
     for task in tasks:
-        if isinstance(task, bytes):
-            task = task.decode("utf-8")
         j = json.loads(task)
-        if j and isinstance(j, list):
-            j = j[0]
         body = json.loads(base64.b64decode(j['body']))
         submitted_tasks.append(body[0][0])
+    return submitted_tasks
 
+
+def get_celery_unacked_tasks(app):
+    with app.pool.acquire(block=True) as conn:
+        tasks = conn.default_channel.client.hvals("unacked")
+
+    submitted_tasks = []
+    for task in tasks:
+        task = task.decode("utf-8")
+        j = json.loads(task)
+        if not isinstance(j, list):
+            continue
+        j = j[0]
+        body = json.loads(base64.b64decode(j['body']))
+        submitted_tasks.append(body[0][0])
     return submitted_tasks
 
 

@@ -27,7 +27,7 @@ from packaging.version import parse as parse_version
 from jinja2 import Template
 
 from app.libs.logger import log
-from app.libs.common import get_celery_queued_tasks
+from app.libs.common import get_celery_queued_tasks, get_celery_unacked_tasks
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderException
 from app.libs.getter import RebuilderDist, get_rebuilt_packages, BuildPackage
@@ -69,7 +69,8 @@ def func(pct, allvals):
 
 def generate_results(app):
     rebuild_results = get_rebuilt_packages(app)
-    running_rebuilds = [BuildPackage.from_dict(p) for p in get_celery_queued_tasks(app, "unacked")]
+    running_rebuilds = [BuildPackage.from_dict(p) for p in get_celery_unacked_tasks(app)
+                        if isinstance(p, dict)]
     try:
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
