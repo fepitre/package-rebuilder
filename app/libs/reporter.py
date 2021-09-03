@@ -19,7 +19,7 @@
 #
 
 import os
-import requests
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -99,11 +99,11 @@ def generate_results(app):
                 packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
 
                 # Prepare the result data
-                result = {"reproducible": [], "unreproducible": [], "failure": [], "running": [], "pending": []}
+                result = {"reproducible": [], "unreproducible": [], "failure": [], "running": [], "pending": [], "retry": []}
                 packages_list[pkgset_name] = []
                 for package in packages_to_rebuild:
                     if package in running_rebuilds:
-                        package["badge"] = "https://img.shields.io/badge/-running-blue"
+                        package["badge"] = "https://img.shields.io/badge/-running-dodgerblue"
                         result["running"].append(package)
                     elif latest_results.get(package.name, {}):
                         pkg = latest_results[package.name]
@@ -124,9 +124,9 @@ def generate_results(app):
                             result["failure"].append(pkg)
                         elif latest_results[package.name]["status"] == "retry":
                             pkg["log"] = f'{os.path.dirname(pkg["log"]).replace(f"/artifacts/{dist.distribution}", "..")}/log-fail/{os.path.basename(pkg["log"])}'
-                            pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
-                            pkg["status"] = "pending"
-                            result["pending"].append(pkg)
+                            pkg["badge"] = "https://img.shields.io/badge/-retry-orange"
+                            pkg["status"] = "retry"
+                            result["retry"].append(pkg)
                     else:
                         pkg = package
                         # On clean of FAILED tasks, previous info remains
@@ -146,19 +146,19 @@ def generate_results(app):
                     count = len(result["reproducible"])
                     x.append(count)
                     legends.append(f"Reproducible")
-                    colors.append("green")
+                    colors.append("forestgreen")
                     explode.append(0)
                 if result["unreproducible"]:
                     count = len(result["unreproducible"])
                     x.append(count)
                     legends.append(f"Unreproducible")
-                    colors.append("orange")
+                    colors.append("goldenrod")
                     explode.append(0)
                 if result["failure"]:
                     count = len(result["failure"])
                     x.append(count)
                     legends.append(f"Failure")
-                    colors.append("red")
+                    colors.append("firebrick")
                     explode.append(0)
                 if result["pending"]:
                     count = len(result["pending"])
@@ -166,11 +166,17 @@ def generate_results(app):
                     legends.append(f"Pending")
                     colors.append("grey")
                     explode.append(0)
+                if result["retry"]:
+                    count = len(result["retry"])
+                    x.append(count)
+                    legends.append(f"Retry")
+                    colors.append("orangered")
+                    explode.append(0)
                 if result["running"]:
                     count = len(result["running"])
                     x.append(count)
                     legends.append(f"Running")
-                    colors.append("blue")
+                    colors.append("dodgerblue")
                     explode.append(0)
 
                 fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
@@ -182,8 +188,8 @@ def generate_results(app):
 
                 plots[pkgset_name] = f"{dist.name}_{pkgset_name}.{dist.arch}.png"
 
-                # with open(f"{results_path}/{dist}_db.json", "w") as fd:
-                #     fd.write(json.dumps(latest_results, indent=2) + "\n")
+                with open(f"{results_path}/{dist}.json", "w") as fd:
+                    fd.write(json.dumps(result, indent=2) + "\n")
 
             data = {"dist": f"{dist.distribution} {dist.name} ({dist.arch})", "packages": packages_list, "plots": plots}
             with open(f"{results_path}/{dist.name}.{dist.arch}.html", 'w') as fd:
