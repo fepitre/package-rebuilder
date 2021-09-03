@@ -109,17 +109,17 @@ def generate_results(app):
                         if latest_results[package.name]["status"] == "reproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-success-success"
                             if pkg["log"]:
-                                pkg["log"] = pkg["log"].replace(f"/artifacts/{dist.distribution}/", "../")
+                                pkg["log"] = f'{os.path.dirname(pkg["log"]).replace(f"/artifacts/{dist.distribution}", "..")}/log-ok/{os.path.basename(pkg["log"])}'
                             result["reproducible"].append(pkg)
                         elif latest_results[package.name]["status"] == "unreproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-unreproducible-yellow"
                             if pkg["log"]:
-                                pkg["log"] = pkg["log"].replace(f"/artifacts/{dist.distribution}/", "../")
+                                pkg["log"] = f'{os.path.dirname(pkg["log"]).replace(f"/artifacts/{dist.distribution}", "..")}/log-ok-unreproducible/{os.path.basename(pkg["log"])}'
                             result["unreproducible"].append(pkg)
                         elif latest_results[package.name]["status"] == "failure":
                             pkg["badge"] = "https://img.shields.io/badge/-failure-red"
                             if pkg["log"]:
-                                pkg["log"] = pkg["log"].replace(f"/artifacts/{dist.distribution}/", "../")
+                                pkg["log"] = f'{os.path.dirname(pkg["log"]).replace(f"/artifacts/{dist.distribution}", "..")}/log-fail/{os.path.basename(pkg["log"])}'
                             result["failure"].append(pkg)
                         elif latest_results[package.name]["status"] == "retry":
                             pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
