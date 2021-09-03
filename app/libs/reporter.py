@@ -27,9 +27,10 @@ from packaging.version import parse as parse_version
 from jinja2 import Template
 
 from app.libs.logger import log
+from app.libs.common import get_celery_queued_tasks
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderException
-from app.libs.getter import RebuilderDist, get_rebuilt_packages
+from app.libs.getter import RebuilderDist, get_rebuilt_packages, BuildPackage
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
@@ -68,6 +69,7 @@ def func(pct, allvals):
 
 def generate_results(app):
     rebuild_results = get_rebuilt_packages(app)
+    running_rebuilds = [BuildPackage.from_dict(p) for p in get_celery_queued_tasks(app, "unacked")]
     try:
         for dist in Config['dist'].split():
             dist = RebuilderDist(dist)
@@ -96,10 +98,13 @@ def generate_results(app):
                 packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
 
                 # Prepare the result data
-                result = {"reproducible": [], "unreproducible": [], "failure": [], "pending": []}
+                result = {"reproducible": [], "unreproducible": [], "failure": [], "running": [], "pending": []}
                 packages_list[pkgset_name] = []
                 for package in packages_to_rebuild:
-                    if latest_results.get(package.name, {}):
+                    if package in running_rebuilds:
+                        package["badge"] = "https://img.shields.io/badge/-running-blue"
+                        result["running"].append(package)
+                    elif latest_results.get(package.name, {}):
                         pkg = latest_results[package.name]
                         if latest_results[package.name]["status"] == "reproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-success-success"
@@ -158,6 +163,12 @@ def generate_results(app):
                     x.append(count)
                     legends.append(f"Pending")
                     colors.append("grey")
+                    explode.append(0)
+                if result["running"]:
+                    count = len(result["running"])
+                    x.append(count)
+                    legends.append(f"Running")
+                    colors.append("blue")
                     explode.append(0)
 
                 fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
