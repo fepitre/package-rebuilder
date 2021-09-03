@@ -123,6 +123,7 @@ def generate_results(app):
                                 pkg["log"] = f'{os.path.dirname(pkg["log"]).replace(f"/artifacts/{dist.distribution}", "..")}/log-fail/{os.path.basename(pkg["log"])}'
                             result["failure"].append(pkg)
                         elif latest_results[package.name]["status"] == "retry":
+                            pkg["log"] = f'{os.path.dirname(pkg["log"]).replace(f"/artifacts/{dist.distribution}", "..")}/log-fail/{os.path.basename(pkg["log"])}'
                             pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
                             pkg["status"] = "pending"
                             result["pending"].append(pkg)
