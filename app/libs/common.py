@@ -18,8 +18,18 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+import os
 import json
 import base64
+
+try:
+    import koji
+except ImportError:
+    koji = None
+try:
+    import debian.debian_support
+except ImportError:
+    debian = None
 
 DEBIAN = {
     "buster": "10",
@@ -47,6 +57,46 @@ def is_fedora(dist):
 def is_debian(dist):
     dist, package_sets = f"{dist}+".split('+', 1)
     return DEBIAN.get(dist, None) is not None
+
+
+def parse_rpm_buildinfo_fname(buildinfo):
+    bn = os.path.basename(
+        buildinfo).replace('.buildinfo', '').replace('-buildinfo', '')
+    if not koji.check_NVRA(bn):
+        return
+    parsed_bn = koji.parse_NVRA(bn)
+    # TODO: use 'verrel' terminology even for Debian?
+    parsed_bn['version'] = '{}-{}'.format(
+        parsed_bn['version'], parsed_bn['release'])
+    return parsed_bn
+
+
+def parse_deb_buildinfo_fname(buildinfo):
+    bn = os.path.basename(buildinfo)
+    parsed_tmp = bn.replace('.buildinfo', '').split('_')
+    parsed_bn = {}
+    if len(parsed_tmp) == 3:
+        if parsed_tmp[1] == "":
+            return
+        parsed_nv = debian.debian_support.NativeVersion(parsed_tmp[1])
+        parsed_bn['name'] = parsed_tmp[0]
+        parsed_bn['epoch'] = parsed_nv._BaseVersion__epoch
+        parsed_bn['version'] = parsed_nv._BaseVersion__full_version
+        parsed_bn['arch'] = parsed_tmp[2].split('-')
+    return parsed_bn
+
+
+def rebuild_task_parser(task):
+    parsed_task = None
+    if task["status"] == 'SUCCESS' and isinstance(task["result"], dict)\
+            and task["result"].get("rebuild", None):
+        parsed_task = task["result"]["rebuild"]
+    elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
+            and task["result"]["exc_type"] == "RebuilderExceptionBuild":
+        # We have stored package info in exception
+        parsed_task = [task["result"]["exc_message"][0]]
+        parsed_task[0]["status"] = task["status"].lower()
+    return parsed_task
 
 
 def get_celery_queued_tasks(app, queue_name):

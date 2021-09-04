@@ -33,49 +33,10 @@ except ImportError:
     debian = None
 
 from packaging.version import parse as parse_version
-from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_backend_tasks
+from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, \
+    get_backend_tasks, rebuild_task_parser, parse_deb_buildinfo_fname, parse_rpm_buildinfo_fname
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
 from app.libs.logger import log
-
-
-def parse_rpm_buildinfo_fname(buildinfo):
-    bn = os.path.basename(
-        buildinfo).replace('.buildinfo', '').replace('-buildinfo', '')
-    if not koji.check_NVRA(bn):
-        return
-    parsed_bn = koji.parse_NVRA(bn)
-    # TODO: use 'verrel' terminology even for Debian?
-    parsed_bn['version'] = '{}-{}'.format(
-        parsed_bn['version'], parsed_bn['release'])
-    return parsed_bn
-
-
-def parse_deb_buildinfo_fname(buildinfo):
-    bn = os.path.basename(buildinfo)
-    parsed_tmp = bn.replace('.buildinfo', '').split('_')
-    parsed_bn = {}
-    if len(parsed_tmp) == 3:
-        if parsed_tmp[1] == "":
-            return
-        parsed_nv = debian.debian_support.NativeVersion(parsed_tmp[1])
-        parsed_bn['name'] = parsed_tmp[0]
-        parsed_bn['epoch'] = parsed_nv._BaseVersion__epoch
-        parsed_bn['version'] = parsed_nv._BaseVersion__full_version
-        parsed_bn['arch'] = parsed_tmp[2].split('-')
-    return parsed_bn
-
-
-def rebuild_task_parser(task):
-    parsed_task = None
-    if task["status"] == 'SUCCESS' and isinstance(task["result"], dict)\
-            and task["result"].get("rebuild", None):
-        parsed_task = task["result"]["rebuild"]
-    elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
-            and task["result"]["exc_type"] == "RebuilderExceptionBuild":
-        # We have stored package info in exception
-        parsed_task = [task["result"]["exc_message"][0]]
-        parsed_task[0]["status"] = task["status"].lower()
-    return parsed_task
 
 
 def get_rebuilt_packages(app):
