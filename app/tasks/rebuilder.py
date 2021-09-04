@@ -232,9 +232,9 @@ def upload(package):
     else:
         log_dir = f"{output_dir}/log-fail"
     os.makedirs(log_dir, exist_ok=True)
-    dst_log = f"{log_dir}/{os.path.basename(package.log)}"
+    dst_log = f"{log_dir}/{package.log}"
     if not os.path.exists(dst_log):
-        shutil.move(package.log, dst_log)
+        shutil.move(f"/artifacts/{builder.distdir}/{package.log}", dst_log)
 
     # generate plots from results
     try:

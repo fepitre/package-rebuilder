@@ -75,7 +75,6 @@ class FedoraRebuilder:
 class DebianRebuilder(BaseRebuilder):
     def __init__(self, package, **kwargs):
         super().__init__(package, **kwargs)
-        self.logfile = "debian-{}".format(self.logfile)
         self.distdir = f"debian"
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"
         self.snapshot_query_url = kwargs.get(
@@ -113,9 +112,9 @@ class DebianRebuilder(BaseRebuilder):
             tempdir = self.gen_temp_dir()
             result, build_cmd = self.debrebuild(tempdir)
 
-            self.logfile = f'{self.basedir}/{self.logfile}'
-            os.makedirs(os.path.dirname(self.logfile), exist_ok=True)
-            with open(self.logfile, 'wb') as fd:
+            logfile = f'{self.basedir}/{self.logfile}'
+            os.makedirs(os.path.dirname(logfile), exist_ok=True)
+            with open(logfile, 'wb') as fd:
                 fd.write(result.stdout)
 
             # copy build files to artifacts dir: we expect build artifacts
@@ -162,7 +161,6 @@ class QubesRebuilderDEB(DebianRebuilder):
             package.dist.lstrip('qubes-').split('-', 2)
         self.distdir = f"qubes/deb/r{qubes_release}/{package_set}"
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"
-        self.logfile = self.logfile.replace('debian-', '')
         self.extra_build_args = [
             "--gpg-verify",
             "--gpg-verify-key=/opt/debrebuild/tests/keys/qubes-debian-r4.asc",
