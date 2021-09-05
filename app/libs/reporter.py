@@ -64,7 +64,8 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
 
 def func(pct, allvals):
     absolute = round(pct / 100. * np.sum(allvals))
-    return "{:.1f}%\n({:d})".format(pct, absolute)
+    res = "{:.1f}%\n({:d})".format(pct, absolute)
+    return res
 
 
 def generate_results(app):
@@ -159,30 +160,38 @@ def generate_results(app):
                     x.append(count)
                     legends.append(f"Failure")
                     colors.append("firebrick")
-                    explode.append(0)
+                    explode.append(0.1)
                 if result["pending"]:
                     count = len(result["pending"])
                     x.append(count)
                     legends.append(f"Pending")
                     colors.append("grey")
-                    explode.append(0)
+                    explode.append(0.2)
                 if result["retry"]:
                     count = len(result["retry"])
                     x.append(count)
                     legends.append(f"Retry")
                     colors.append("orangered")
-                    explode.append(0)
+                    explode.append(0.3)
                 if result["running"]:
                     count = len(result["running"])
                     x.append(count)
                     legends.append(f"Running")
                     colors.append("dodgerblue")
-                    explode.append(0)
+                    explode.append(0.5)
 
                 fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
-                wedges, texts, autotexts = ax.pie(x, colors=colors, explode=explode, autopct=lambda pct: func(pct, x), shadow=True, startangle=90, normalize=True)
+                wedges, texts, autotexts = ax.pie(
+                    x, colors=colors, explode=explode,
+                    labels=x,
+                    autopct="%.1f%%",
+                    shadow=False, startangle=270,
+                    normalize=True,
+                    labeldistance=1.1)
                 ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
+                for idx, text in enumerate(texts):
+                    text.set_color(colors[idx])
                 fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png", bbox_inches='tight')
                 plt.close(fig)
 
