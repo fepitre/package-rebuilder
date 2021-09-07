@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import time
 import tempfile
+import glob
 
 from app.libs.common import is_qubes, is_debian, is_fedora
 from app.libs.exceptions import RebuilderExceptionBuild
@@ -53,21 +54,18 @@ def getRebuilder(package, **kwargs):
     return rebuilder
 
 
-# Find log file with respect to latest build and status
-def get_log_file(package):
-    builder = getRebuilder(package=package)
+def get_latest_log_file(package):
+    builder = getRebuilder(package)
     output_dir = f"/rebuild/{builder.distribution}"
-    log_files = None
-    if package.status == "reproducible" and os.path.exists(f"{output_dir}/log-ok"):
-        log_files = os.listdir(f"{output_dir}/log-ok")
-    elif package.status == "unreproducible" and os.path.exists(f"{output_dir}/log-ok-unreproducible"):
-        log_files = os.listdir(f"{output_dir}/log-ok-unreproducible")
-    elif package.status in ("failure", "retry") and os.path.exists(f"{output_dir}/log-fail"):
-        log_files = os.listdir(f"{output_dir}/log-fail")
-    if log_files:
-        filtered_log_files = sorted([f for f in log_files if f.startswith(str(package))], reverse=True)
-        if filtered_log_files:
-            return filtered_log_files[0]
+    pkg_log_files = []
+    if package.status == "reproducible":
+        pkg_log_files = glob.glob(f"{output_dir}/log-ok/{package}-*.log")
+    elif package.status == "unreproducible":
+        pkg_log_files = glob.glob(f"{output_dir}/log-ok-unreproducible/{package}-*.log")
+    elif package.status:
+        pkg_log_files = glob.glob(f"{output_dir}/log-fail/{package}-*.log")
+    pkg_log_files = sorted([os.path.basename(f) for f in pkg_log_files], reverse=True)
+    return pkg_log_files[0] if pkg_log_files else ""
 
 
 class BaseRebuilder:

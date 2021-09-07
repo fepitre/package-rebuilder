@@ -37,6 +37,7 @@ celery_app_conf = {
         'app.tasks.rebuilder.get': {'queue': 'get'},
         'app.tasks.rebuilder.rebuild': {'queue': 'rebuild'},
         'app.tasks.rebuilder.attest': {'queue': 'attest'},
+        'app.tasks.rebuilder.report': {'queue': 'report'},
         'app.tasks.rebuilder.upload': {'queue': 'upload'},
         'app.tasks.rebuilder.fail': {'queue': 'fail'},
     }

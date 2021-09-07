@@ -30,7 +30,7 @@ from app.libs.logger import log
 from app.libs.common import get_celery_queued_tasks, get_celery_unacked_tasks
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderException
-from app.libs.rebuilder import get_log_file
+from app.libs.rebuilder import get_latest_log_file
 from app.libs.getter import RebuilderDist, get_rebuilt_packages, BuildPackage
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
@@ -87,7 +87,8 @@ def generate_results(app):
             latest_results = {}
             for r in results:
                 if latest_results.get(r["name"], None):
-                    if parse_version(r["version"]) <= parse_version(latest_results[r["name"]]["version"]):
+                    if parse_version(r["version"]) \
+                            <= parse_version(latest_results[r["name"]]["version"]):
                         continue
                 latest_results[r["name"]] = r
 
@@ -101,44 +102,48 @@ def generate_results(app):
                 packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
 
                 # Prepare the result data
-                result = {"reproducible": [], "unreproducible": [], "failure": [], "running": [], "pending": [], "retry": []}
+                result = {
+                    "reproducible": [],
+                    "unreproducible": [],
+                    "failure": [],
+                    "running": [],
+                    "pending": [],
+                    "retry": []
+                }
                 packages_list[pkgset_name] = []
                 for package in packages_to_rebuild:
                     if package in running_rebuilds:
                         package["badge"] = "https://img.shields.io/badge/-running-dodgerblue"
                         result["running"].append(package)
                     elif latest_results.get(package.name, {}):
-                        pkg = latest_results[package.name]
-                        if not os.path.basename(pkg["log"]):
-                            logfile = get_log_file(pkg)
-                            if logfile:
-                                pkg["log"] = logfile
-                        if latest_results[package.name]["status"] == "reproducible":
+                        # Attempt to get log file from log-ok, log-ok-unreproducible or log-fail.
+                        # It happens if backend database has been flushed.
+                        pkg = BuildPackage.from_dict(latest_results[package.name])
+                        if pkg.status == "reproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-success-success"
-                            if pkg["log"] and os.path.basename(pkg["log"]):
-                                pkg["log"] = f'../log-ok/{os.path.basename(pkg["log"])}'
-                            result["reproducible"].append(pkg)
-                        elif latest_results[package.name]["status"] == "unreproducible":
+                            if pkg.log and os.path.basename(pkg.log):
+                                pkg.log = f'../log-ok/{os.path.basename(pkg.log)}'
+                            result["reproducible"].append(dict(pkg))
+                        elif pkg.status == "unreproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-unreproducible-yellow"
-                            if pkg["log"] and os.path.basename(pkg["log"]):
-                                pkg["log"] = f'../log-ok-unreproducible/{os.path.basename(pkg["log"])}'
-                            result["unreproducible"].append(pkg)
-                        elif latest_results[package.name]["status"] == "failure":
+                            if pkg.log and os.path.basename(pkg.log):
+                                pkg.log = f'../log-ok-unreproducible/{os.path.basename(pkg.log)}'
+                            result["unreproducible"].append(dict(pkg))
+                        elif pkg.status == "failure":
                             pkg["badge"] = "https://img.shields.io/badge/-failure-red"
-                            if pkg["log"] and os.path.basename(pkg["log"]):
-                                pkg["log"] = f'../log-fail/{os.path.basename(pkg["log"])}'
-                            result["failure"].append(pkg)
-                        elif latest_results[package.name]["status"] == "retry":
-                            pkg["log"] = f'../log-fail/{os.path.basename(pkg["log"])}'
+                            if pkg.log and os.path.basename(pkg.log):
+                                pkg.log = f'../log-fail/{os.path.basename(pkg.log)}'
+                            result["failure"].append(dict(pkg))
+                        elif pkg.status == "retry":
+                            if pkg.log and os.path.basename(pkg.log):
+                                pkg.log = f'../log-fail/{os.path.basename(pkg.log)}'
                             pkg["badge"] = "https://img.shields.io/badge/-retry-orange"
-                            pkg["status"] = "retry"
-                            result["retry"].append(pkg)
+                            pkg.status = "retry"
+                            result["retry"].append(dict(pkg))
                     else:
                         pkg = package
-                        # On clean of FAILED tasks, previous info remains
-                        pkg["log"] = ""
                         pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
-                        result["pending"].append(pkg)
+                        result["pending"].append(dict(pkg))
 
                 # We simplify how we render HTML
                 for packages in result.values():
@@ -193,11 +198,13 @@ def generate_results(app):
                     shadow=False, startangle=270,
                     normalize=True,
                     labeldistance=1.1)
-                ax.legend(wedges, legends, title="Status", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+                ax.legend(wedges, legends, title="Status", loc="center left",
+                          bbox_to_anchor=(1, 0, 0.5, 1))
                 ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
                 for idx, text in enumerate(texts):
                     text.set_color(colors[idx])
-                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png", bbox_inches='tight')
+                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png",
+                            bbox_inches='tight')
                 plt.close(fig)
 
                 plots[pkgset_name] = f"{dist.name}_{pkgset_name}.{dist.arch}.png"
@@ -205,7 +212,11 @@ def generate_results(app):
                 with open(f"{results_path}/{dist}.json", "w") as fd:
                     fd.write(json.dumps(result, indent=2) + "\n")
 
-            data = {"dist": f"{dist.distribution} {dist.name} ({dist.arch})", "packages": packages_list, "plots": plots}
+            data = {
+                "dist": f"{dist.distribution} {dist.name} ({dist.arch})",
+                "packages": packages_list,
+                "plots": plots
+            }
             with open(f"{results_path}/{dist.name}.{dist.arch}.html", 'w') as fd:
                 fd.write(HTML_TEMPLATE.render(**data))
 

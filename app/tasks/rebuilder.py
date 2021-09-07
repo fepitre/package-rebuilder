@@ -32,7 +32,7 @@ from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderException
 from app.libs.common import get_celery_queued_tasks
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
-from app.libs.rebuilder import getRebuilder, get_log_file
+from app.libs.rebuilder import getRebuilder, get_latest_log_file
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
 from app.libs.reporter import generate_results
 
@@ -99,9 +99,6 @@ def get(dist, force_retry=False):
                         break
                 if stored_package and stored_package.status in \
                         ("reproducible", "unreproducible", "failure", "retry"):
-                    logfile = get_log_file(package)
-                    if logfile:
-                        package.log = logfile
                     if stored_package.status in ("reproducible", "unreproducible"):
                         log.debug(f"{package}: already built ({stored_package.status}). Skipping")
                         continue
@@ -124,9 +121,7 @@ def get(dist, force_retry=False):
                         package.status = "unreproducible"
                     if package.status in ("reproducible", "unreproducible"):
                         log.debug(f"{package}: already built ({package.status}). Skipping")
-                        logfile = get_log_file(package)
-                        if logfile:
-                            package.log = logfile
+                        package.log = get_latest_log_file(package)
                         result.setdefault("rebuild", []).append(dict(package))
                         continue
 
@@ -164,7 +159,7 @@ def rebuild(package):
         package = args[0]
         # Ensure to keep a trace of retries for backend
         package["retries"] = rebuild.request.retries
-        upload.delay(package)
+        report.delay(package)
         raise RebuilderExceptionBuild(package)
     attest.delay(package)
     result = {"rebuild": [dict(package)]}
@@ -218,16 +213,13 @@ def attest(package):
         if not os.path.exists(binpkg):
             os.symlink(package.name, binpkg)
 
-    # remove artifacts
-    shutil.rmtree(package.artifacts)
-
-    upload.delay(package)
+    report.delay(package)
     result = {"attest": [dict(package)]}
     return result
 
 
 @app.task(base=RebuilderTask)
-def upload(package):
+def report(package):
     try:
         package = BuildPackage.from_dict(package)
     except KeyError as e:
@@ -256,6 +248,18 @@ def upload(package):
         generate_results(app)
     except RebuilderException as e:
         log.error(f"Failed to generate plots: {str(e)}")
+
+    # remove artifacts
+    shutil.rmtree(package.artifacts)
+
+
+@app.task(base=RebuilderTask)
+def upload(package):
+    try:
+        package = BuildPackage.from_dict(package)
+    except KeyError as e:
+        log.error("Failed to parse package.")
+        raise RebuilderExceptionUpload from e
 
     try:
         if Config['ssh_key'] and Config['remote_ssh_host'] and \

@@ -137,13 +137,31 @@ services:
 # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=attest
 
+  reporter:
+    restart: always
+    image: 'rebuilder_base'
+    volumes:
+      - .:/app
+# reporter worker needs artifacts, and in-toto directory
+      - '/var/lib/rebuilder/artifacts:/artifacts'
+      - '/var/lib/rebuilder/rebuild:/rebuild'
+    depends_on:
+      - broker
+      - backend
+    links:
+      - broker
+      - backend
+    environment:
+      - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_RESULT_BACKEND=mongodb://backend:27017
+    entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=report
+
   uploader:
     restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# uploader worker needs artifacts, in-toto directory and SSH key for rsyncing on remote location
-      - '/var/lib/rebuilder/artifacts:/artifacts'
+# uploader worker needs in-toto directory and SSH key for rsyncing on remote location
       - '/var/lib/rebuilder/rebuild:/rebuild'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
     depends_on:
