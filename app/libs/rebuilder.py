@@ -56,7 +56,7 @@ def getRebuilder(package, **kwargs):
 # Find log file with respect to latest build and status
 def get_log_file(package):
     builder = getRebuilder(package=package)
-    output_dir = f"/rebuild/{builder.distdir}"
+    output_dir = f"/rebuild/{builder.distribution}"
     log_files = None
     if package.status == "reproducible" and os.path.exists(f"{output_dir}/log-ok"):
         log_files = os.listdir(f"{output_dir}/log-ok")
@@ -92,7 +92,8 @@ class FedoraRebuilder:
 class DebianRebuilder(BaseRebuilder):
     def __init__(self, package, **kwargs):
         super().__init__(package, **kwargs)
-        self.distdir = f"debian"
+        self.distribution = f"debian"
+        self.distdir = self.distribution
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"
         self.snapshot_query_url = kwargs.get(
             'snapshot_query_url', 'http://snapshot.notset.fr')
@@ -178,7 +179,8 @@ class QubesRebuilderDEB(DebianRebuilder):
         super().__init__(package, **kwargs)
         qubes_release, package_set, _ = \
             package.dist.lstrip('qubes-').split('-', 2)
-        self.distdir = f"qubes/deb/r{qubes_release}/{package_set}"
+        self.distribution = "qubes"
+        self.distdir = f"{self.distribution}/deb/r{qubes_release}/{package_set}"
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"
         self.extra_build_args = [
             "--gpg-verify",

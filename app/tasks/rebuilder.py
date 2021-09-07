@@ -233,7 +233,7 @@ def upload(package):
 
     # collect log
     builder = getRebuilder(package=package)
-    output_dir = f"/rebuild/{builder.distdir}"
+    output_dir = f"/rebuild/{builder.distribution}"
     if package.status == "reproducible":
         log_dir = f"{output_dir}/log-ok"
     elif package.status == "unreproducible":
