@@ -38,7 +38,7 @@ from app.libs.reporter import generate_results
 
 
 class RebuilderTask(celery.Task):
-    autoretry_for = (RebuilderExceptionBuild, RebuilderExceptionUpload)
+    autoretry_for = (RebuilderExceptionBuild,)
     throws = (RebuilderException,)
     max_retries = Config['max_retries']
     # Let snapshot service to get the latest data from official repositories
@@ -244,9 +244,12 @@ def upload(package):
     else:
         log_dir = f"{output_dir}/log-fail"
     os.makedirs(log_dir, exist_ok=True)
+    src_log = f"/artifacts/{builder.distdir}/{package.log}"
     dst_log = f"{log_dir}/{package.log}"
+    if not os.path.exists(src_log):
+        raise RebuilderExceptionUpload(f"Cannot find build log file {src_log}")
     if not os.path.exists(dst_log):
-        shutil.move(f"/artifacts/{builder.distdir}/{package.log}", dst_log)
+        shutil.move(src_log, dst_log)
 
     # generate plots from results
     try:
