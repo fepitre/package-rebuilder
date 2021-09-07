@@ -32,7 +32,7 @@ from app.libs.exceptions import RebuilderExceptionGet, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderException
 from app.libs.common import get_celery_queued_tasks
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
-from app.libs.rebuilder import getRebuilder
+from app.libs.rebuilder import getRebuilder, get_log_file
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
 from app.libs.reporter import generate_results
 
@@ -91,35 +91,44 @@ def get(dist, force_retry=False):
             stored_packages = get_rebuilt_packages(app)
 
             for package in packages:
-                # check if metadata exists
-                metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
-                metadata_unrepr = os.path.join(
-                    get_intoto_metadata_output_dir(package, unreproducible=True), 'metadata')
-                if os.path.exists(metadata):
-                    package.status = "reproducible"
-                elif os.path.exists(metadata_unrepr):
-                    package.status = "unreproducible"
-                if package.status in ("reproducible", "unreproducible"):
-                    log.debug(f"{package}: already built ({package.status}). Skipping")
-                    result.setdefault("rebuild", []).append(dict(package))
-                    continue
-
                 # check if package has already been triggered for build
                 stored_package = None
                 for p in stored_packages:
                     if p == package:
                         stored_package = p
                         break
-                if stored_package and stored_package.status in ("reproducible", "unreproducible"):
-                    log.debug(f"{package}: already built ({stored_package.status}). Skipping")
-                    continue
-                if stored_package and stored_package.status == "fail":
-                    if not force_retry:
+                if stored_package and stored_package.status in \
+                        ("reproducible", "unreproducible", "failure", "retry"):
+                    logfile = get_log_file(package)
+                    if logfile:
+                        package.log = logfile
+                    if stored_package.status in ("reproducible", "unreproducible"):
                         log.debug(f"{package}: already built ({stored_package.status}). Skipping")
                         continue
-                if stored_package and stored_package.status == "retry":
-                    log.debug(f"{package}: already submitted. Skipping.")
-                    continue
+                    if stored_package.status == "failure":
+                        if not force_retry:
+                            log.debug(f"{package}: already built ({stored_package.status}). Skipping")
+                            continue
+                    if stored_package.status == "retry":
+                        log.debug(f"{package}: already submitted. Skipping.")
+                        continue
+
+                # check if metadata exists
+                if not stored_package:
+                    metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
+                    metadata_unrepr = os.path.join(
+                        get_intoto_metadata_output_dir(package, unreproducible=True), 'metadata')
+                    if os.path.exists(metadata):
+                        package.status = "reproducible"
+                    elif os.path.exists(metadata_unrepr):
+                        package.status = "unreproducible"
+                    if package.status in ("reproducible", "unreproducible"):
+                        log.debug(f"{package}: already built ({package.status}). Skipping")
+                        logfile = get_log_file(package)
+                        if logfile:
+                            package.log = logfile
+                        result.setdefault("rebuild", []).append(dict(package))
+                        continue
 
                 if dict(package) not in get_celery_queued_tasks(app, "rebuild"):
                     log.debug(f"{package}: submitted for rebuild.")

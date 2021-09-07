@@ -53,6 +53,23 @@ def getRebuilder(package, **kwargs):
     return rebuilder
 
 
+# Find log file with respect to latest build and status
+def get_log_file(package):
+    builder = getRebuilder(package=package)
+    output_dir = f"/rebuild/{builder.distdir}"
+    log_files = None
+    if package.status == "reproducible" and os.path.exists(f"{output_dir}/log-ok"):
+        log_files = os.listdir(f"{output_dir}/log-ok")
+    elif package.status == "unreproducible" and os.path.exists(f"{output_dir}/log-ok-unreproducible"):
+        log_files = os.listdir(f"{output_dir}/log-ok-unreproducible")
+    elif package.status in ("failure", "retry") and os.path.exists(f"{output_dir}/log-fail"):
+        log_files = os.listdir(f"{output_dir}/log-fail")
+    if log_files:
+        filtered_log_files = sorted([f for f in log_files if f.startswith(str(package))], reverse=True)
+        if filtered_log_files:
+            return filtered_log_files[0]
+
+
 class BaseRebuilder:
     def __init__(self, package, **kwargs):
         self.package = package
@@ -138,6 +155,8 @@ class DebianRebuilder(BaseRebuilder):
                 self.package.status = "reproducible"
             elif result.returncode == 2:
                 self.package.status = "unreproducible"
+            else:
+                self.package.status = "failure"
 
             if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(

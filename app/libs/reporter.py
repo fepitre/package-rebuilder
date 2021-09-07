@@ -30,6 +30,7 @@ from app.libs.logger import log
 from app.libs.common import get_celery_queued_tasks, get_celery_unacked_tasks
 from app.config.config import Config
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderException
+from app.libs.rebuilder import get_log_file
 from app.libs.getter import RebuilderDist, get_rebuilt_packages, BuildPackage
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
@@ -108,6 +109,10 @@ def generate_results(app):
                         result["running"].append(package)
                     elif latest_results.get(package.name, {}):
                         pkg = latest_results[package.name]
+                        if not os.path.basename(pkg["log"]):
+                            logfile = get_log_file(pkg)
+                            if logfile:
+                                pkg["log"] = logfile
                         if latest_results[package.name]["status"] == "reproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-success-success"
                             if pkg["log"] and os.path.basename(pkg["log"]):
