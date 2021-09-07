@@ -182,6 +182,9 @@ def attest(package):
     if package.status not in ("reproducible", "unreproducible"):
         raise RebuilderExceptionAttest(f"Cannot determine package status for {package}")
 
+    if not os.path.exists(package.artifacts):
+        raise RebuilderExceptionAttest(f"Cannot find package artifacts for {package}")
+
     os.chdir(package.artifacts)
     buildinfo = glob.glob(f"{package.name}*.buildinfo")
     if not buildinfo:
