@@ -86,6 +86,27 @@ def parse_deb_buildinfo_fname(buildinfo):
     return parsed_bn
 
 
+def get_celery_active_tasks(app):
+    inspect = app.control.inspect()
+    tasks = []
+    queues = []
+    active = inspect.active()
+    reserved = inspect.reserved()
+    scheduled = inspect.scheduled()
+    if active:
+        queues.append(active)
+    if reserved:
+        queues.append(reserved)
+    if scheduled:
+        queues.append(scheduled)
+    for d in queues:
+        for _, queue in d.items():
+            for task in queue:
+                if task.get('args'):
+                    tasks.append(task['args'][0])
+    return tasks
+
+
 def rebuild_task_parser(task):
     parsed_task = None
     if task["status"] == 'SUCCESS' and isinstance(task["result"], dict)\

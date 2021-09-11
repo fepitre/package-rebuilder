@@ -37,35 +37,31 @@ from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_outp
 from app.libs.reporter import generate_results
 
 
-class RebuilderTask(celery.Task):
+# TODO: improve serialize/deserialize Package
+
+class BaseTask(celery.Task):
     autoretry_for = (RebuilderExceptionBuild,)
     throws = (RebuilderException,)
     max_retries = Config['max_retries']
     # Let snapshot service to get the latest data from official repositories
     default_retry_delay = 60 * 60
 
-# TODO: improve serialize/deserialize Package
 
+class RebuildTask(BaseTask):
 
-def get_celery_active_tasks():
-    inspect = app.control.inspect()
-    tasks = []
-    queues = []
-    active = inspect.active()
-    reserved = inspect.reserved()
-    scheduled = inspect.scheduled()
-    if active:
-        queues.append(active)
-    if reserved:
-        queues.append(reserved)
-    if scheduled:
-        queues.append(scheduled)
-    for d in queues:
-        for _, queue in d.items():
-            for task in queue:
-                if task.get('args'):
-                    tasks.append(task['args'][0])
-    return tasks
+    def on_retry(self, exc, task_id, args, kwargs, einfo):
+        package = args[0]
+        # Ensure to keep a trace of retries for backend
+        package["retries"] = self.request.retries
+        report.delay(package)
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        package = args[0]
+        report.delay(package)
+
+    def on_success(self, retval, task_id, args, kwargs):
+        package = retval["rebuild"][0]
+        attest.delay(package)
 
 
 @app.on_after_finalize.connect
@@ -75,7 +71,7 @@ def setup_periodic_tasks(sender, **kwargs):
         sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
 
-@app.task(base=RebuilderTask)
+@app.task(base=BaseTask)
 def get(dist, force_retry=False):
     result = {}
     if dist in get_celery_queued_tasks(app, "get"):
@@ -140,33 +136,24 @@ def get(dist, force_retry=False):
     return result
 
 
-@app.task(base=RebuilderTask)
+@app.task(base=RebuildTask)
 def rebuild(package):
     try:
         package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
-    try:
-        builder = getRebuilder(
-            package=package,
-            snapshot_query_url=Config['snapshot'],
-            snapshot_mirror=Config['snapshot']
-        )
-        package = builder.run()
-    except RebuilderExceptionBuild as e:
-        args, = e.args
-        package = args[0]
-        # Ensure to keep a trace of retries for backend
-        package["retries"] = rebuild.request.retries
-        report.delay(package)
-        raise RebuilderExceptionBuild(package)
-    attest.delay(package)
+    builder = getRebuilder(
+        package=package,
+        snapshot_query_url=Config['snapshot'],
+        snapshot_mirror=Config['snapshot']
+    )
+    package = builder.run()
     result = {"rebuild": [dict(package)]}
     return result
 
 
-@app.task(base=RebuilderTask)
+@app.task(base=BaseTask)
 def attest(package):
     try:
         package = BuildPackage.from_dict(package)
@@ -218,7 +205,7 @@ def attest(package):
     return result
 
 
-@app.task(base=RebuilderTask)
+@app.task(base=BaseTask)
 def report(package):
     try:
         package = BuildPackage.from_dict(package)
@@ -253,7 +240,7 @@ def report(package):
     shutil.rmtree(package.artifacts)
 
 
-@app.task(base=RebuilderTask)
+@app.task(base=BaseTask)
 def upload(package):
     try:
         package = BuildPackage.from_dict(package)
