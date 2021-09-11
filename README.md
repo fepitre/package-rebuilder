@@ -12,12 +12,12 @@ The current design of `PackageRebuilder` is based on individual tasks orchestrat
 which services `getter`, `rebuilder`, `uploader` and `attester` are connected to. All the task results are stored in `backend`.
 
 ```
-                                           .-----------.
-                                          .| getter    |
-                                         / '-----------'
-        .---------.                     /
-        | broker  |----.               '      .-----------.
-        '---------'     '--------------. .----| uploader  |
+                         .-----------.     .-----------.
+                         | reporter  |    .| getter    |
+                         '-----.-----'   / '-----------'
+        .---------.            |        /
+        | broker  |----.       |       '      .-----------.
+        '---------'     '------'-------. .----| uploader  |
                         |              |'     '-----------'
                         | orchestrator |
                         |              |.     .-----------.
@@ -38,7 +38,10 @@ Each service is doing only tasks defined in separate queues defined as follows:
 | getter | get |
 | rebuilder | rebuild |
 | attester | attest |
+| reporter | report |
 | uploader | upload |
+
+> TODO: improve documentation and add schema about typical build chain.
 
 The `getter` service is responsible to get the latest `buildinfo` on `Qubes OS` or `Debian` (soon `Fedora`) repositories
 and to add new `rebuild` tasks. Once a `rebuilder` has finished it adds a new `attest` task for `attester`. Then, `attester`
