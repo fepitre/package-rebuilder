@@ -52,19 +52,19 @@ services:
     ports:
       - 5556:5556
 
-## This is for monitoring easier Redis with a web interface
-#  phpredisadmin:
-#    restart: always
-#    image: 'erikdubbelboer/phpredisadmin'
-#    depends_on:
-#      - broker
-#    links:
-#      - broker
-#    ports:
-#     - '8080:80'
-#    environment:
-#      - REDIS_1_HOST=broker
-#      - REDIS_1_NAME=broker
+# This is for monitoring easier Redis with a web interface
+  phpredisadmin:
+    restart: always
+    image: 'erikdubbelboer/phpredisadmin'
+    depends_on:
+      - broker
+    links:
+      - broker
+    ports:
+     - '8080:80'
+    environment:
+      - REDIS_1_HOST=broker
+      - REDIS_1_NAME=broker
 
 ### PackageRebuilder
 
