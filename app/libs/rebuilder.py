@@ -127,10 +127,6 @@ class DebianRebuilder(BaseRebuilder):
             with open(logfile, 'wb') as fd:
                 fd.write(result.stdout)
 
-            # copy build files to artifacts dir: we expect build artifacts
-            # to be only files (.changes, .deb, .buildinfo, .tar.*)
-            # this is a workaround for:
-            # https://gitlab.mister-muffin.de/josch/mmdebstrap/issues/11#issuecomment-403
             artifactsdir = os.path.join(self.basedir, os.path.basename(tempdir))
             os.makedirs(artifactsdir)
             for f in [os.path.join(tempdir, f)

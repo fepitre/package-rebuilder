@@ -50,13 +50,15 @@ class BaseTask(celery.Task):
 class RebuildTask(BaseTask):
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        package = args[0]
+        results, = exc.args
+        package = results[0]
         # Ensure to keep a trace of retries for backend
         package["retries"] = self.request.retries
         report.delay(package)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        package = args[0]
+        results, = exc.args
+        package = results[0]
         report.delay(package)
 
     def on_success(self, retval, task_id, args, kwargs):
