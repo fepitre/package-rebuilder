@@ -216,12 +216,7 @@ def report(package):
     # collect log
     builder = getRebuilder(package=package)
     output_dir = f"/rebuild/{builder.distribution}"
-    if package.status == "reproducible":
-        log_dir = f"{output_dir}/log-ok"
-    elif package.status == "unreproducible":
-        log_dir = f"{output_dir}/log-ok-unreproducible"
-    else:
-        log_dir = f"{output_dir}/log-fail"
+    log_dir = f"{output_dir}/logs"
     os.makedirs(log_dir, exist_ok=True)
     src_log = f"/artifacts/{builder.distdir}/{package.log}"
     dst_log = f"{log_dir}/{package.log}"

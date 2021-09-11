@@ -116,30 +116,19 @@ def generate_results(app):
                         package["badge"] = "https://img.shields.io/badge/-running-dodgerblue"
                         result["running"].append(package)
                     elif latest_results.get(package.name, {}):
-                        # Attempt to get log file from log-ok, log-ok-unreproducible or log-fail.
-                        # It happens if backend database has been flushed.
                         pkg = BuildPackage.from_dict(latest_results[package.name])
+                        if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
+                            if pkg.log and os.path.basename(pkg.log):
+                                pkg.log = f'../logs/{os.path.basename(pkg.log)}'
+                            result[pkg.status].append(dict(pkg))
                         if pkg.status == "reproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-success-success"
-                            if pkg.log and os.path.basename(pkg.log):
-                                pkg.log = f'../log-ok/{os.path.basename(pkg.log)}'
-                            result["reproducible"].append(dict(pkg))
-                        elif pkg.status == "unreproducible":
+                        if pkg.status == "unreproducible":
                             pkg["badge"] = "https://img.shields.io/badge/-unreproducible-yellow"
-                            if pkg.log and os.path.basename(pkg.log):
-                                pkg.log = f'../log-ok-unreproducible/{os.path.basename(pkg.log)}'
-                            result["unreproducible"].append(dict(pkg))
-                        elif pkg.status == "failure":
+                        if pkg.status == "failure":
                             pkg["badge"] = "https://img.shields.io/badge/-failure-red"
-                            if pkg.log and os.path.basename(pkg.log):
-                                pkg.log = f'../log-fail/{os.path.basename(pkg.log)}'
-                            result["failure"].append(dict(pkg))
-                        elif pkg.status == "retry":
-                            if pkg.log and os.path.basename(pkg.log):
-                                pkg.log = f'../log-fail/{os.path.basename(pkg.log)}'
+                        if pkg.status == "retry":
                             pkg["badge"] = "https://img.shields.io/badge/-retry-orange"
-                            pkg.status = "retry"
-                            result["retry"].append(dict(pkg))
                     else:
                         pkg = package
                         pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
@@ -221,4 +210,4 @@ def generate_results(app):
                 fd.write(HTML_TEMPLATE.render(**data))
 
     except Exception as e:
-        raise RebuilderException("{}: failed to generate status.".format(str(e)))
+        raise RebuilderException(f"Failed to generate status: {str(e)}")

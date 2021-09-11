@@ -57,13 +57,7 @@ def getRebuilder(package, **kwargs):
 def get_latest_log_file(package):
     builder = getRebuilder(package)
     output_dir = f"/rebuild/{builder.distribution}"
-    pkg_log_files = []
-    if package.status == "reproducible":
-        pkg_log_files = glob.glob(f"{output_dir}/log-ok/{package}-*.log")
-    elif package.status == "unreproducible":
-        pkg_log_files = glob.glob(f"{output_dir}/log-ok-unreproducible/{package}-*.log")
-    elif package.status:
-        pkg_log_files = glob.glob(f"{output_dir}/log-fail/{package}-*.log")
+    pkg_log_files = glob.glob(f"{output_dir}/logs/{package}-*.log")
     pkg_log_files = sorted([os.path.basename(f) for f in pkg_log_files], reverse=True)
     return pkg_log_files[0] if pkg_log_files else ""
 
