@@ -27,9 +27,9 @@ import debian.deb822
 from app.celery import app
 from app.libs.logger import log
 from app.config.config import Config
-from app.libs.exceptions import RebuilderExceptionGet, \
-    RebuilderExceptionUpload, RebuilderExceptionBuild, \
-    RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderException
+from app.libs.exceptions import RebuilderException, \
+    RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
+    RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
 from app.libs.common import get_celery_queued_tasks
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
 from app.libs.rebuilder import getRebuilder, get_latest_log_file
@@ -211,7 +211,7 @@ def report(package):
         package = BuildPackage.from_dict(package)
     except KeyError as e:
         log.error("Failed to parse package.")
-        raise RebuilderExceptionUpload from e
+        raise RebuilderExceptionReport from e
 
     # collect log
     builder = getRebuilder(package=package)
@@ -226,9 +226,11 @@ def report(package):
     src_log = f"/artifacts/{builder.distdir}/{package.log}"
     dst_log = f"{log_dir}/{package.log}"
     if not os.path.exists(src_log):
-        raise RebuilderExceptionUpload(f"Cannot find build log file {src_log}")
+        raise RebuilderExceptionReport(f"Cannot find build log file {src_log}")
     if not os.path.exists(dst_log):
         shutil.move(src_log, dst_log)
+    if not os.path.exists(dst_log):
+        raise RebuilderExceptionReport(f"Cannot find build log file {dst_log}")
 
     # generate plots from results
     try:
@@ -237,7 +239,14 @@ def report(package):
         log.error(f"Failed to generate plots: {str(e)}")
 
     # remove artifacts
-    shutil.rmtree(package.artifacts)
+    if os.path.exists(package.artifacts):
+        shutil.rmtree(package.artifacts)
+    else:
+        log.error(f"Cannot find package artifacts for cleaning {package}")
+
+    result = {"report": [dict(package)]}
+    upload.delay(package)
+    return result
 
 
 @app.task(base=BaseTask)

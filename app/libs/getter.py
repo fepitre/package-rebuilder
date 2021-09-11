@@ -48,7 +48,7 @@ def get_rebuilt_packages(app):
             for p in parsed_task:
                 package = BuildPackage.from_dict(p)
                 parsed_packages.append(package)
-    return parsed_packages
+    return sorted(parsed_packages, key=lambda x: str(x))
 
 
 class RebuilderDist:

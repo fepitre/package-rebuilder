@@ -41,3 +41,7 @@ class RebuilderExceptionBuild(RebuilderException):
 
 class RebuilderExceptionAttest(RebuilderException):
     pass
+
+
+class RebuilderExceptionReport(RebuilderException):
+    pass

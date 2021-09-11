@@ -115,7 +115,7 @@ def rebuild_task_parser(task):
     elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
             and task["result"]["exc_type"] == "RebuilderExceptionBuild":
         # We have stored package info in exception
-        parsed_task = [task["result"]["exc_message"][0]]
+        parsed_task = task["result"]["exc_message"][0]
         parsed_task[0]["status"] = task["status"].lower()
     return parsed_task
 
