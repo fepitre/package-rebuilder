@@ -62,6 +62,33 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
 </html>
 """)
 
+BADGES = {
+    "reproducible": "https://img.shields.io/badge/-success-success",
+    "unreproducible": "https://img.shields.io/badge/-unreproducible-yellow",
+    "failure": "https://img.shields.io/badge/-failure-red",
+    "retry": "https://img.shields.io/badge/-retry-orange",
+    "pending": "https://img.shields.io/badge/-pending-lightgrey",
+    "running": "https://img.shields.io/badge/-running-dodgerblue"
+}
+
+COLORS = {
+    "reproducible": "forestgreen",
+    "unreproducible": "goldenrod",
+    "failure": "firebrick",
+    "retry": "orangered",
+    "pending": "grey",
+    "running": "dodgerblue"
+}
+
+EXPLODE = {
+    "reproducible": 0,
+    "unreproducible": 0,
+    "failure": 0.1,
+    "pending": 0.2,
+    "retry": 0.3,
+    "running": 0.5
+}
+
 
 def func(pct, allvals):
     absolute = round(pct / 100. * np.sum(allvals))
@@ -113,25 +140,18 @@ def generate_results(app):
                 packages_list[pkgset_name] = []
                 for package in packages_to_rebuild:
                     if package in running_rebuilds:
-                        package["badge"] = "https://img.shields.io/badge/-running-dodgerblue"
+                        package["badge"] = BADGES["running"]
                         result["running"].append(package)
                     elif latest_results.get(package.name, {}):
                         pkg = BuildPackage.from_dict(latest_results[package.name])
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             if pkg.log and os.path.basename(pkg.log):
                                 pkg.log = f'../logs/{os.path.basename(pkg.log)}'
+                            pkg["badge"] = BADGES[pkg.status]
                             result[pkg.status].append(dict(pkg))
-                        if pkg.status == "reproducible":
-                            pkg["badge"] = "https://img.shields.io/badge/-success-success"
-                        if pkg.status == "unreproducible":
-                            pkg["badge"] = "https://img.shields.io/badge/-unreproducible-yellow"
-                        if pkg.status == "failure":
-                            pkg["badge"] = "https://img.shields.io/badge/-failure-red"
-                        if pkg.status == "retry":
-                            pkg["badge"] = "https://img.shields.io/badge/-retry-orange"
                     else:
                         pkg = package
-                        pkg["badge"] = "https://img.shields.io/badge/-pending-lightgrey"
+                        pkg["badge"] = BADGES["pending"]
                         result["pending"].append(dict(pkg))
 
                 # We simplify how we render HTML
@@ -142,42 +162,14 @@ def generate_results(app):
                 legends = []
                 explode = []
                 colors = []
-                if result["reproducible"]:
-                    count = len(result["reproducible"])
+                for status in ["reproducible", "unreproducible", "failure", "retry", "running", "pending"]:
+                    if not result[status]:
+                        continue
+                    count = len(result[status])
                     x.append(count)
-                    legends.append(f"Reproducible")
-                    colors.append("forestgreen")
-                    explode.append(0)
-                if result["unreproducible"]:
-                    count = len(result["unreproducible"])
-                    x.append(count)
-                    legends.append(f"Unreproducible")
-                    colors.append("goldenrod")
-                    explode.append(0)
-                if result["failure"]:
-                    count = len(result["failure"])
-                    x.append(count)
-                    legends.append(f"Failure")
-                    colors.append("firebrick")
-                    explode.append(0.1)
-                if result["pending"]:
-                    count = len(result["pending"])
-                    x.append(count)
-                    legends.append(f"Pending")
-                    colors.append("grey")
-                    explode.append(0.2)
-                if result["retry"]:
-                    count = len(result["retry"])
-                    x.append(count)
-                    legends.append(f"Retry")
-                    colors.append("orangered")
-                    explode.append(0.3)
-                if result["running"]:
-                    count = len(result["running"])
-                    x.append(count)
-                    legends.append(f"Running")
-                    colors.append("dodgerblue")
-                    explode.append(0.5)
+                    legends.append(status)
+                    colors.append(COLORS[status])
+                    explode.append(EXPLODE[status])
 
                 fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
                 wedges, texts, autotexts = ax.pie(
