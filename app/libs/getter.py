@@ -75,9 +75,9 @@ class RebuilderDist:
             self.name, package_sets = "{}+".format(self.name).split('+', 1)
             self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
                                  if pkg_set]
-            # If no package set is provided, we understand it as "all"
+            # If no package set is provided, we understand it as "full"
             if not self.package_sets:
-                self.package_sets = ["all"]
+                self.package_sets = ["full"]
             self.distribution = "debian"
             self.repo = DebianRepository(self.name, self.arch, self.package_sets)
         else:
@@ -202,7 +202,7 @@ class DebianRepository:
             package_sets = [package_set]
         else:
             package_sets = self.package_sets
-        if "all" not in package_sets:
+        if "full" not in package_sets:
             for pkgset_name in package_sets:
                 filtered_package_names += self.get_package_names_in_debian_set(pkgset_name)
             filtered_package_names = set(sorted(filtered_package_names))
