@@ -70,6 +70,9 @@ def setup_periodic_tasks(sender, **kwargs):
     for dist in Config['dist'].split():
         sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
+    # fixme: improve how we expose results
+    sender.add_periodic_task(60, _generate_results.s())
+
 
 @app.task(base=BaseTask)
 def get(dist, force_retry=False):
@@ -227,12 +230,6 @@ def report(package):
     if not os.path.exists(dst_log):
         raise RebuilderExceptionReport(f"Cannot find build log file {dst_log}")
 
-    # generate plots from results
-    try:
-        generate_results(app)
-    except RebuilderException as e:
-        log.error(f"Failed to generate plots: {str(e)}")
-
     # remove artifacts
     if os.path.exists(package.artifacts):
         shutil.rmtree(package.artifacts)
@@ -245,9 +242,9 @@ def report(package):
 
 
 @app.task(base=BaseTask)
-def upload(package):
+def upload(package=None):
     try:
-        package = BuildPackage.from_dict(package)
+        package = BuildPackage.from_dict(package) if package else None
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionUpload from e
@@ -283,5 +280,15 @@ def upload(package):
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
         log.error(str(e))
         raise RebuilderExceptionUpload("Failed to upload")
-    result = {"upload": [dict(package)]}
+    result = {"upload": [dict(package)] if package else []}
     return result
+
+
+@app.task(base=BaseTask)
+def _generate_results():
+    # generate plots from results
+    try:
+        generate_results(app)
+    except RebuilderException as e:
+        log.error(f"Failed to generate plots: {str(e)}")
+    upload.delay()
