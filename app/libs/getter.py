@@ -40,6 +40,7 @@ from app.libs.logger import log
 
 
 def get_rebuilt_packages(app):
+    rebuilt_packages = {}
     parsed_packages = []
     tasks = get_backend_tasks(app)
     for task in tasks:
@@ -48,7 +49,10 @@ def get_rebuilt_packages(app):
             for p in parsed_task:
                 package = BuildPackage.from_dict(p)
                 parsed_packages.append(package)
-    return sorted(parsed_packages, key=lambda x: str(x))
+    # create dict to help into getting package info faster
+    for p in sorted(parsed_packages, key=lambda x: str(x)):
+        rebuilt_packages[str(p)] = p
+    return rebuilt_packages
 
 
 class RebuilderDist:

@@ -94,11 +94,7 @@ def get(dist, force_retry=False):
 
             for package in packages:
                 # check if package has already been triggered for build
-                stored_package = None
-                for p in stored_packages:
-                    if p == package:
-                        stored_package = p
-                        break
+                stored_package = stored_packages.get(str(package), None)
                 if stored_package and stored_package.status in \
                         ("reproducible", "unreproducible", "failure", "retry"):
                     if stored_package.status in ("reproducible", "unreproducible"):

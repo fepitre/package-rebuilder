@@ -109,7 +109,7 @@ def generate_results(app, distribution):
             os.makedirs(results_path, exist_ok=True)
 
             # Get results for given dist
-            results = [x for x in rebuild_results
+            results = [x for x in rebuild_results.values()
                        if x['dist'] == dist.name and x['arch'] == dist.arch]
 
             # Filter latest results
