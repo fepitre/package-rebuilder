@@ -92,6 +92,9 @@ def get(dist, force_retry=False):
             # get previous triggered packages builds
             stored_packages = get_rebuilt_packages(app)
 
+            # queued packages to be rebuilt
+            rebuild_queued_tasks = get_celery_queued_tasks(app, "rebuild")
+
             for package in packages:
                 # check if package has already been triggered for build
                 stored_package = stored_packages.get(str(package), None)
@@ -123,7 +126,7 @@ def get(dist, force_retry=False):
                         result.setdefault("rebuild", []).append(dict(package))
                         continue
 
-                if dict(package) not in get_celery_queued_tasks(app, "rebuild"):
+                if dict(package) not in rebuild_queued_tasks:
                     log.debug(f"{package}: submitted for rebuild.")
                     # Add rebuild task
                     rebuild.delay(package)
