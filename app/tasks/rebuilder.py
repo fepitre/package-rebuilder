@@ -37,12 +37,12 @@ from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_outp
 from app.libs.reporter import generate_results
 
 
-# TODO: improve serialize/deserialize Package
+# fixme: improve serialize/deserialize Package
 
 class BaseTask(celery.Task):
     autoretry_for = (RebuilderExceptionBuild,)
     throws = (RebuilderException,)
-    max_retries = Config['max_retries']
+    max_retries = Config["celery"]["max_retries"]
     # Let snapshot service to get the latest data from official repositories
     default_retry_delay = 60 * 60
 
@@ -68,12 +68,13 @@ class RebuildTask(BaseTask):
 
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
-    schedule = Config['schedule']
-    for dist in Config['dist'].split():
-        sender.add_periodic_task(schedule, get.s(dist), name=dist)
+    for distribution in Config["distribution"].keys():
+        schedule = Config["distribution"][distribution]["schedule"]
+        for dist in Config["distribution"][distribution]["dist"]:
+            sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
-    # fixme: improve how we expose results
-    sender.add_periodic_task(60, _generate_results.s())
+        # fixme: improve how we expose results
+        sender.add_periodic_task(60, _generate_results.s(distribution))
 
 
 @app.task(base=BaseTask)
@@ -148,11 +149,7 @@ def rebuild(package):
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
-    builder = getRebuilder(
-        package=package,
-        snapshot_query_url=Config['snapshot'],
-        snapshot_mirror=Config['snapshot']
-    )
+    builder = getRebuilder(package=package)
     package = builder.run()
     result = {"rebuild": [dict(package)]}
     return result
@@ -165,6 +162,9 @@ def attest(package):
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
+
+    # fixme: create better function to get distribution
+    distribution = RebuilderDist(package.dist).distribution
 
     if package.status not in ("reproducible", "unreproducible"):
         raise RebuilderExceptionAttest(f"Cannot determine package status for {package}")
@@ -180,30 +180,36 @@ def attest(package):
     with open(buildinfo) as fd:
         parsed_buildinfo = debian.deb822.BuildInfo(fd)
 
-    # generate in-toto metadata
-    generate_intoto_metadata(package.artifacts, Config['sign_keyid'], parsed_buildinfo)
-    link = glob.glob("rebuild*.link")
-    if not link:
-        raise RebuilderExceptionAttest(f"Cannot find link for {package}")
-    link = link[0]
+    gpg_sign_keyid = Config[distribution].get("sign_keyid")
+    if gpg_sign_keyid:
+        # generate in-toto metadata
+        generate_intoto_metadata(package.artifacts, gpg_sign_keyid, parsed_buildinfo)
+        link = glob.glob("rebuild*.link")
+        if not link:
+            raise RebuilderExceptionAttest(f"Cannot find link for {package}")
+        link = link[0]
 
-    # create final output directory
-    outputdir = get_intoto_metadata_output_dir(package, unreproducible=package.status == "unreproducible")
-    os.makedirs(outputdir, exist_ok=True)
-    shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
-    shutil.copy2(os.path.join(package.artifacts, link), outputdir)
+        # create final output directory
+        outputdir = get_intoto_metadata_output_dir(
+            package, unreproducible=package.status == "unreproducible")
+        os.makedirs(outputdir, exist_ok=True)
+        shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
+        shutil.copy2(os.path.join(package.artifacts, link), outputdir)
 
-    # create symlink to new buildinfo and rebuild link file
-    os.chdir(outputdir)
-    if not os.path.exists("buildinfo"):
-        os.symlink(buildinfo, "buildinfo")
-    if not os.path.exists("metadata"):
-        os.symlink(link, "metadata")
+        # create symlink to new buildinfo and rebuild link file
+        os.chdir(outputdir)
+        if not os.path.exists("buildinfo"):
+            os.symlink(buildinfo, "buildinfo")
+        if not os.path.exists("metadata"):
+            os.symlink(link, "metadata")
 
-    os.chdir(os.path.join(outputdir, '../../'))
-    for binpkg in parsed_buildinfo.get_binary():
-        if not os.path.exists(binpkg):
-            os.symlink(package.name, binpkg)
+        os.chdir(os.path.join(outputdir, "../../"))
+        for binpkg in parsed_buildinfo.get_binary():
+            if not os.path.exists(binpkg):
+                os.symlink(package.name, binpkg)
+    else:
+        log.info(f"Unable to sign in-toto metadata: "
+                 f"no GPG keyid provided for distribution '{distribution}.")
 
     report.delay(package)
     result = {"attest": [dict(package)]}
@@ -244,41 +250,56 @@ def report(package):
 
 
 @app.task(base=BaseTask)
-def upload(package=None):
+def upload(package=None, distribution=None):
     try:
         package = BuildPackage.from_dict(package) if package else None
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionUpload from e
 
+    ssh_key = Config["common"].get("repo-ssh-key", None)
+    remote_ssh_host = Config["common"].get("repo-remote-ssh-host", None)
+    remote_ssh_basedir = Config["common"].get("repo-remote-ssh-basedir", None)
+
+    if package:
+        distribution = RebuilderDist(package.dist).distribution
+
+    if distribution:
+        ssh_key = Config["distribution"][distribution].get(
+            "repo-ssh-key", ssh_key)
+        remote_ssh_host = Config["distribution"][distribution].get(
+            "repo-remote-ssh-host", remote_ssh_host)
+        remote_ssh_basedir = Config["distribution"][distribution].get(
+            "repo-remote-ssh-basedir", remote_ssh_basedir)
+
     try:
-        if Config['ssh_key'] and Config['remote_ssh_host'] and \
-                Config['remote_ssh_basedir']:
+        if ssh_key and remote_ssh_host and remote_ssh_basedir:
             # pay attention to latest "/", we use rsync!
             dir_to_upload = ["/rebuild/"]
 
             for local_dir in dir_to_upload:
-                remote_host = Config['remote_ssh_host']
-                remote_basedir = Config['remote_ssh_basedir']
-                remote_dir = "{}/{}".format(remote_basedir, local_dir)
-                remote_path = "{}:{}".format(remote_host, remote_dir)
+                # fixme: maybe ssh keyword is useless: someone could
+                #  serve a local mirror directly
+                remote_host = remote_ssh_host
+                remote_basedir = remote_ssh_basedir
+                remote_dir = f"{remote_basedir}/{local_dir}"
+                remote_path = f"{remote_host}:{remote_dir}"
 
                 createfolder_cmd = [
-                    "ssh", "-i", "/root/.ssh/{}".format(Config['ssh_key']),
-                    "-o", "StrictHostKeyChecking=no", "{}".format(remote_host),
-                    "mkdir", "-p", "{}".format(remote_dir)
+                    "ssh", "-i", f"/root/.ssh/{ssh_key}",
+                    "-o", "StrictHostKeyChecking=no", remote_host,
+                    "mkdir", "-p", remote_dir
                 ]
                 subprocess.run(createfolder_cmd, check=True)
 
                 cmd = [
                     "rsync", "-av", "--progress", "-e",
-                    "ssh -i /root/.ssh/{} -o StrictHostKeyChecking=no".format(
-                        Config['ssh_key']),
+                    f"ssh -i /root/.ssh/{ssh_key} -o StrictHostKeyChecking=no",
                     local_dir, remote_path
                 ]
                 subprocess.run(cmd, check=True)
         else:
-            raise FileNotFoundError('Missing SSH key or SSH remote destination')
+            raise FileNotFoundError("Missing SSH key or SSH remote destination")
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
         log.error(str(e))
         raise RebuilderExceptionUpload("Failed to upload")
@@ -287,10 +308,10 @@ def upload(package=None):
 
 
 @app.task(base=BaseTask)
-def _generate_results():
+def _generate_results(distribution):
     # generate plots from results
     try:
-        generate_results(app)
+        generate_results(app, distribution)
     except RebuilderException as e:
         log.error(f"Failed to generate plots: {str(e)}")
-    upload.delay()
+    upload.delay(distribution=distribution)

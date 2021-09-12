@@ -22,24 +22,23 @@ import celery
 from app.config.config import Config
 from app.libs.logger import log
 
-app = celery.Celery('PackageRebuilder')
+app = celery.Celery("PackageRebuilder")
 
 celery_app_conf = {
-    'broker_url': Config['broker'],
-    'result_backend': Config['backend'],
-    'include': [
-        'app.tasks.rebuilder',
+    "broker_url": Config["celery"]["broker"],
+    "result_backend": Config["celery"]["backend"],
+    "include": [
+        "app.tasks.rebuilder",
     ],
-    'enable_utc': True,
-    'timezone': 'UTC',
-#    'task_acks_late': True,
-    'task_routes': {
-        'app.tasks.rebuilder.get': {'queue': 'get'},
-        'app.tasks.rebuilder.rebuild': {'queue': 'rebuild'},
-        'app.tasks.rebuilder.attest': {'queue': 'attest'},
-        'app.tasks.rebuilder.report': {'queue': 'report'},
-        'app.tasks.rebuilder.upload': {'queue': 'upload'},
-        'app.tasks.rebuilder._generate_results': {'queue': 'report'},
+    "enable_utc": True,
+    "timezone": "UTC",
+    "task_routes": {
+        "app.tasks.rebuilder.get": {"queue": "get"},
+        "app.tasks.rebuilder.rebuild": {"queue": "rebuild"},
+        "app.tasks.rebuilder.attest": {"queue": "attest"},
+        "app.tasks.rebuilder.report": {"queue": "report"},
+        "app.tasks.rebuilder.upload": {"queue": "upload"},
+        "app.tasks.rebuilder._generate_results": {"queue": "report"},
     }
 }
 
@@ -47,5 +46,5 @@ app.conf.update(**celery_app_conf)
 
 log.debug(Config)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.start()

@@ -97,13 +97,13 @@ def func(pct, allvals):
     return res
 
 
-def generate_results(app):
+def generate_results(app, distribution):
     rebuild_results = get_rebuilt_packages(app)
     running_rebuilds = [BuildPackage.from_dict(p)
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]
     try:
-        for dist in Config['dist'].split():
+        for dist in Config["distribution"][distribution]["dist"]:
             dist = RebuilderDist(dist)
             results_path = f"/rebuild/{dist.distribution}/results"
             os.makedirs(results_path, exist_ok=True)

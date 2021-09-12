@@ -25,11 +25,12 @@ import time
 import tempfile
 import glob
 
+from app.config.config import Config
 from app.libs.common import is_qubes, is_debian, is_fedora
 from app.libs.exceptions import RebuilderExceptionBuild
 
 
-# TODO: Don't use wrapper but import directly Rebuilder functions
+# fixme: don't use wrapper but import directly Rebuilder functions
 #       from debrebuild and rpmreproduce
 
 
@@ -38,7 +39,13 @@ def getRebuilder(package, **kwargs):
         qubes_release, package_set, dist = \
             package.dist.lstrip('qubes-').split('-', 2)
         if is_debian(dist):
-            rebuilder = QubesRebuilderDEB(package, **kwargs)
+            rebuilder = QubesRebuilderDEB(
+                package,
+                snapshot_query_url=Config["distribution"].get("qubesos", {})['snapshot'],
+                snapshot_mirror=Config["distribution"].get("qubesos", {})['snapshot'],
+                sign_keyid=Config["distribution"].get("qubesos", {})['in-toto-sign-key-fpr'],
+                **kwargs
+            )
         elif is_fedora(dist):
             rebuilder = QubesRebuilderRPM(package, **kwargs)
         else:
@@ -47,7 +54,13 @@ def getRebuilder(package, **kwargs):
     elif is_fedora(package.dist):
         rebuilder = FedoraRebuilder(package, **kwargs)
     elif is_debian(package.dist):
-        rebuilder = DebianRebuilder(package, **kwargs)
+        rebuilder = DebianRebuilder(
+            package,
+            snapshot_query_url=Config["distribution"].get("debian", {})['snapshot'],
+            snapshot_mirror=Config["distribution"].get("debian", {})['snapshot'],
+            sign_keyid=Config["distribution"].get("debian", {})['in-toto-sign-key-fpr'],
+            **kwargs
+        )
     else:
         raise RebuilderExceptionBuild(
             f"Unsupported distribution: {package.dist}")
