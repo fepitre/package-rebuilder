@@ -41,11 +41,34 @@ Each service is doing only tasks defined in separate queues defined as follows:
 | reporter | report |
 | uploader | upload |
 
-> TODO: improve documentation and add schema about typical build chain.
+```
+                                                       .-----------.
+                              .----------------------->| attester  |
+                              |                        '-----------'
+                              |                              |
+                        build passed                  in-toto metadata
+                              |                              |
+                              |                              v
+      .--------.        .-----------.                  .-----------.        .-----------.
+      | getter |------->| rebuilder |---build failed-->| reporter  |------->| uploader  |
+      '--------'        '-----------'                  '-----------'        '-----------'
+          ^                                                                       |
+          |                                                                     rsync
+          |                                                                       |
+          |                                                                       v
+    *************                                                       *********************
+    * buildinfo *                                                       * remote repository *
+    *************                                                       *********************
+```
+
 
 The `getter` service is responsible to get the latest `buildinfo` on `Qubes OS` or `Debian` (soon `Fedora`) repositories
-and to add new `rebuild` tasks. Once a `rebuilder` has finished it adds a new `attest` task for `attester`. Then, `attester`
-will collect rebuild artifacts and generate `in-toto` metadata. Finally, `upload` task is triggered once metadata are generated.
+and to add new `rebuild` tasks. Once a `rebuilder` has finished it adds a new `attest` task for `attester` if the build
+passed else it adds `report` task directly. Then, `attester` will collect rebuild artifacts and generate signed
+`in-toto` metadata. Once metadata are created, the `reporter` collects log and clean artifacts. Finally, `upload` task
+is triggered to upload using `rsync`, `in-toto` metadata, logs and statistics on a remote repository. The purpose of
+the remote repository is to serve `in-toto` metadata.
+
 Either on success or failure, a task result containing useful information about the build is created in `backend`.
 Notably, it contains all the information about a build, its status and the number of retries. In practice, you will
 only scale `rebuilder` service.
@@ -60,7 +83,7 @@ integration. You can access `flower` interface at `http://localhost:5556`.
 
 ## PackageRebuilder: the machinery
 
-This sections helps to configure a `PackageRebuilder` on any environment (not Qubes specific) assuming it satisfies
+This sections helps to configure `PackageRebuilder` on any environment (not Qubes OS specific) assuming it satisfies
 the following dependencies requirements. The current setup is done using `Docker` for which it can be replaced using
 a more classic or Qubes configuration with virtual machines for each service. This will be detailed in a near future.
 The use of `celery` allows extending and interacting with the `broker` easily. For example, one can add webhook trigger
@@ -73,8 +96,13 @@ with or in place of periodic scheduling.
 We recommend installing `PackageRebuilder` in a Debian or CentOS based distribution which still supports `Docker`.
 In a future, we plan to test it with `podman`. Here we give installation steps for a Debian distribution.
 
-On the hosting machine, most of the commands as to be run as `root`.
+A remote repository is needed to upload logs, statistics and `in-toto` metadata. If you don't plan to server `in-toto`
+repository and only rebuild packages to get statistics, you don't have to prepare a GPG key to be used for creating and
+signing metadata. In such case, `attester` service will simply skip the `in-toto` metadata creation.
 
+> Note: On the hosting machine, most of the commands as to be run as `root`.
+
+#### Dependencies
 Ensure to have `docker` and `docker-compose` installed:
 ```
 $ apt install docker docker-compose
@@ -97,38 +125,121 @@ $ cp /opt/rebuilder/rebuilder.service /usr/lib/systemd/system
 $ systemctl daemon-reload
 ```
 
+#### Configuration
+
 Create the following folders:
 ```
 $ mkdir -p /var/lib/rebuilder/{rebuild,broker,backend,ssh,gnupg}
 ```
 
 The previously created folders are mounted differently into containers to store or share persistent data
-(see `/opt/rebuilder/docker-compose.yml`). In `gnupg` folder you need to provide a GPG keyring containing private key used
-to sign `in-toto` metadata. In `ssh` folder you need to add a private SSH key allowed to push on a remote host
-destination. Then, you need to edit the configuration file `/opt/rebuilder/rebuilder.conf` which will be injected
+(see `/opt/rebuilder/docker-compose.yml`).
+
+In `gnupg` folder you need to provide a GPG keyring containing private key used to sign `in-toto` metadata if you plan
+to generate them. If you have created key pair, say `rebuild.asc.priv` and `rebuild.asc.pub`, you need to generate the
+keyring as follows:
+```
+$ GNUPGHOME=/var/lib/rebuilder/gnupg gpg --import rebuild.asc.priv rebuild.asc.pub
+```
+
+In `ssh` folder you need to add a private SSH key allowed to push on a remote host destination via `rsync`. Ensure to
+have proper permissions:
+```
+$ chmod 700 /var/lib/rebuilder/ssh
+$ chmod 600 /var/lib/rebuilder/ssh/id_rsa
+```
+
+Then, you need to edit the configuration file `/opt/rebuilder/rebuilder.conf` which will be injected
 into `docker` images having all the needed configuration information.
 
-For example, here is the one used by `notset-rebuilder`:
+##### Debian configuration
+For example, here is a typical configuration which can be used to rebuild Debian `unstable` and `bullseye`
+(to be adapted with your configuration values):
 ```ini
-[DEFAULT]
+#
+# Specific 'celery' options. Don't modify unless you know what you are doing.
+#
+[celery]
 broker = redis://broker:6379/0
 backend = mongodb://backend:27017
-snapshot = http://snapshot.notset.fr
 
-# Scheduled task period for fetching latest buildinfo files
+[debian]
+# Scheduled task period for fetching latest packages to rebuild
 schedule = 1800
 
-# GPG key fingerprint (container keyring: /root/.gnupg)
-in-toto-sign-key-fpr = 8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C
+# GPG key fingerprint
+# local keyring: /var/lib/rebuilder/gnupg
+# container keyring: /root/.gnupg
+in-toto-sign-key-fpr = 0123456789ABCDEF
 
-# SSH private key name (container path: /root/.ssh/id_rsa)
+# SSH private key name to use for accessing remote host
+# local path: /var/lib/rebuilder/ssh/id_rsa
+# container path: /root/.ssh/id_rsa
 repo-ssh-key = id_rsa
 
-# RSYNC SSH destination
+# Remote host (via SSH)
+repo-remote-ssh-host = rebuilder@rebuilder.debian.net
+
+# Local directory on the remote host
+repo-remote-ssh-basedir = /rebuild
+
+# Snapshot service to use for repositories and API queries
+snapshot = http://snapshot.notset.fr
+
+# Debian suite to rebuild in the format: {suite_name}+{package_set}.{arch}
+dist = unstable+essential+required+build-essential+build-essential-depends+full.amd64
+    unstable+essential+required+build-essential+build-essential-depends+full.all
+    bullseye+essential+required+build-essential+build-essential-depends+full.amd64
+    bullseye+essential+required+build-essential+build-essential-depends+full.all
+```
+
+##### @fepitre's configuration aka NOTSET rebuilder setup
+For example, here is the one used by `notset-rebuilder`
+```ini
+#
+# Specific 'celery' options. Don't modify unless you know what you are doing.
+#
+[celery]
+broker = redis://broker:6379/0
+backend = mongodb://backend:27017
+
+#
+# Each option in 'common' section can be set per distribution section
+#
+[common]
+
+# Scheduled task period for fetching latest packages to rebuild
+schedule = 1800
+
+# GPG key fingerprint
+# local keyring: /var/lib/rebuilder/gnupg
+# container keyring: /root/.gnupg
+in-toto-sign-key-fpr = 8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C
+
+# SSH private key name to use for accessing remote host
+# local path: /var/lib/rebuilder/ssh/id_rsa
+# container path: /root/.ssh/id_rsa
+repo-ssh-key = id_rsa
+
+# Remote host (via SSH)
 repo-remote-ssh-host = rebuilder@mirror.notset.fr
+# Local directory on the remote host
 repo-remote-ssh-basedir = /data/rebuilder
 
-dist = qubes-4.1-vm-bullseye.amd64 qubes-4.1-vm-bullseye.all unstable+essential+required+build-essential+build-essential-depends.amd64 unstable+essential+required+build-essential+build-essential-depends.all
+# Snapshot service to use for repositories and API queries
+snapshot = http://snapshot.notset.fr
+
+#
+# Available sections are 'debian', 'qubesos' and 'fedora' (fixme: the latter is a WIP)
+#
+[debian]
+dist = unstable+essential+required+build-essential+build-essential-depends+full.amd64
+    unstable+essential+required+build-essential+build-essential-depends+full.all
+    bullseye+essential+required+build-essential+build-essential-depends+full.amd64
+    bullseye+essential+required+build-essential+build-essential-depends+full.all
+
+[qubesos]
+dist = qubes-4.1-vm-bullseye.amd64
 ```
 In the current `docker` setup, you only need to adjust `in-toto-sign-key-fpr`, `repo-ssh-key`, `repo-remote-ssh-host`
 and `repo-remote-ssh-basedir` values. Here `schedule` value is the time in second for which `get` task will be
@@ -144,9 +255,11 @@ $ systemctl start rebuilder
 Please note that the first start of `rebuilder` service can take few minutes. In background, it creates all
 needed docker images.
 
-Once it's started, it will fetch for new buildinfo files in Qubes repositories periodically every `30 minutes`
-(`schedule` value in `/opt/rebuilder/rebuilder.conf`). You can manually trigger the `get`. For that, you need to install `python3-celery`, `python3-pymongo`, `python3-packaging`
-and `rsync` on the `rebuilder` machine then, in `/opt/rebuilder`, run:
+Once it's started, it will fetch for new buildinfo files in Debian and Qubes OS repositories periodically every
+`30 minutes` (`schedule` value in `/opt/rebuilder/rebuilder.conf`). You can manually trigger the `get`.
+
+For that, you need to install `python3-celery`, `python3-pymongo`, `python3-packaging` and `rsync` on the `rebuilder`
+machine then, in `/opt/rebuilder`, run:
 ```
 $ CELERY_BROKER_URL="redis://localhost:6379/0" ./init_feed.py
 ```
