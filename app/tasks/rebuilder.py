@@ -30,7 +30,7 @@ from app.config.config import Config
 from app.libs.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
-from app.libs.common import get_celery_queued_tasks
+from app.libs.common import get_celery_queued_tasks, get_distribution
 from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
 from app.libs.rebuilder import getRebuilder, get_latest_log_file
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
@@ -162,8 +162,9 @@ def attest(package):
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
 
-    # fixme: create better function to get distribution
-    distribution = RebuilderDist(package.dist).distribution
+    distribution = get_distribution(package)
+    if not distribution:
+        raise RebuilderExceptionAttest(f"Cannot determine underlying distribution for {package}")
 
     if package.status not in ("reproducible", "unreproducible"):
         raise RebuilderExceptionAttest(f"Cannot determine package status for {package}")
@@ -179,7 +180,7 @@ def attest(package):
     with open(buildinfo) as fd:
         parsed_buildinfo = debian.deb822.BuildInfo(fd)
 
-    gpg_sign_keyid = Config[distribution].get("sign_keyid")
+    gpg_sign_keyid = Config["distribution"].get(distribution, {}).get('in-toto-sign-key-fpr', None)
     if gpg_sign_keyid:
         # generate in-toto metadata
         generate_intoto_metadata(package.artifacts, gpg_sign_keyid, parsed_buildinfo)
@@ -261,7 +262,9 @@ def upload(package=None, distribution=None):
     remote_ssh_basedir = Config["common"].get("repo-remote-ssh-basedir", None)
 
     if package:
-        distribution = RebuilderDist(package.dist).distribution
+        distribution = get_distribution(package)
+        if not distribution:
+            raise RebuilderExceptionUpload(f"Cannot determine underlying distribution for {package}")
 
     if distribution:
         ssh_key = Config["distribution"][distribution].get(

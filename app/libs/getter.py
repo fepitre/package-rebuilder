@@ -38,6 +38,9 @@ from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedor
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
 from app.libs.logger import log
 
+# fixme: clarify terms 'dist', 'name' or 'distribution'. It leads to confusion where dist like in
+#  BuildPackage is 'name'.
+
 
 def get_rebuilt_packages(app):
     rebuilt_packages = {}

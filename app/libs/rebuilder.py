@@ -43,7 +43,6 @@ def getRebuilder(package, **kwargs):
                 package,
                 snapshot_query_url=Config["distribution"].get("qubesos", {})['snapshot'],
                 snapshot_mirror=Config["distribution"].get("qubesos", {})['snapshot'],
-                sign_keyid=Config["distribution"].get("qubesos", {})['in-toto-sign-key-fpr'],
                 **kwargs
             )
         elif is_fedora(dist):
@@ -58,7 +57,6 @@ def getRebuilder(package, **kwargs):
             package,
             snapshot_query_url=Config["distribution"].get("debian", {})['snapshot'],
             snapshot_mirror=Config["distribution"].get("debian", {})['snapshot'],
-            sign_keyid=Config["distribution"].get("debian", {})['in-toto-sign-key-fpr'],
             **kwargs
         )
     else:

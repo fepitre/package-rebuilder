@@ -59,6 +59,15 @@ def is_debian(dist):
     return DEBIAN.get(dist, None) is not None
 
 
+def get_distribution(package):
+    if is_qubes(package.dist):
+        return "qubes"
+    elif is_fedora(package.dist):
+        return "fedora"
+    elif is_debian(package.dist):
+        return "debian"
+
+
 def parse_rpm_buildinfo_fname(buildinfo):
     bn = os.path.basename(
         buildinfo).replace('.buildinfo', '').replace('-buildinfo', '')
