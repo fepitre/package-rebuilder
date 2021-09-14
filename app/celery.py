@@ -39,6 +39,7 @@ celery_app_conf = {
         "app.tasks.rebuilder.report": {"queue": "report"},
         "app.tasks.rebuilder.upload": {"queue": "upload"},
         "app.tasks.rebuilder._generate_results": {"queue": "report"},
+        "app.tasks.rebuilder._metadata_to_db": {"queue": "get"},
     }
 }
 

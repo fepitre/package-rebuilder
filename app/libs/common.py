@@ -46,25 +46,24 @@ DEBIAN_ARCHES = {
 }
 
 
-def is_qubes(dist):
-    return dist.startswith("qubes")
+def is_qubes(distribution):
+    return distribution.startswith("qubes")
 
 
-def is_fedora(dist):
-    return dist.startswith("fedora") or dist.startswith("fc")
+def is_fedora(distribution):
+    return distribution.startswith("fedora") or distribution.startswith("fc")
 
 
-def is_debian(dist):
-    dist, package_sets = f"{dist}+".split('+', 1)
-    return DEBIAN.get(dist, None) is not None
+def is_debian(distribution):
+    return DEBIAN.get(distribution, None) is not None
 
 
-def get_distribution(package):
-    if is_qubes(package.dist):
-        return "qubes"
-    elif is_fedora(package.dist):
+def get_project(distribution):
+    if is_qubes(distribution):
+        return "qubesos"
+    elif is_fedora(distribution):
         return "fedora"
-    elif is_debian(package.dist):
+    elif is_debian(distribution):
         return "debian"
 
 

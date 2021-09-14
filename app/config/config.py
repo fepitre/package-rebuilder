@@ -29,10 +29,10 @@ DEFAULT_CONFIG = {
     "snapshot": "http://snapshot.notset.fr"
 }
 
-# Currently supported distribution
-SUPPORTED_DISTRIBUTIONS = ["qubesos", "debian", "fedora"]
+# Currently supported project
+SUPPORTED_PROJECTS = ["qubesos", "debian", "fedora"]
 
-# Filter allowed options in sections for distributions (e.g. 'common', 'qubesos', 'debian', etc.)
+# Filter allowed options in sections for projects (e.g. 'common', 'qubesos', 'debian', etc.)
 SECTION_OPTIONS = ["schedule", "snapshot", "in-toto-sign-key-fpr", "repo-ssh-key",
                    "repo-remote-ssh-host", "repo-remote-ssh-basedir", "dist"]
 
@@ -55,7 +55,7 @@ Config = {
         "schedule": config.get("common", "schedule", fallback=DEFAULT_CONFIG["schedule"]),
         "snapshot": config.get("common", "snapshot", fallback=DEFAULT_CONFIG["snapshot"]),
     },
-    "distribution": {}
+    "project": {}
 }
 
 if "common" in config.sections():
@@ -69,17 +69,17 @@ if "common" in config.sections():
                 config_option = int(config_option)
             Config["common"][option] = config_option
 
-for distribution in SUPPORTED_DISTRIBUTIONS:
-    if distribution not in config.sections():
+for project in SUPPORTED_PROJECTS:
+    if project not in config.sections():
         continue
-    Config["distribution"][distribution] = {}
+    Config["project"][project] = {}
     for option in SECTION_OPTIONS:
-        config_option = config.get(distribution, option,
+        config_option = config.get(project, option,
                                    fallback=Config["common"].get(option, None))
         if config_option:
-            Config["distribution"][distribution].setdefault(option, {})
+            Config["project"][project].setdefault(option, {})
             if option == "dist":
                 config_option = config_option.replace(' ', '\n').splitlines()
             if option == "schedule":
                 config_option = int(config_option)
-            Config["distribution"][distribution][option] = config_option
+            Config["project"][project][option] = config_option

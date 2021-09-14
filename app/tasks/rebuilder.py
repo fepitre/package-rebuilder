@@ -30,10 +30,10 @@ from app.config.config import Config
 from app.libs.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
-from app.libs.common import get_celery_queued_tasks, get_distribution
-from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages
+from app.libs.common import get_celery_queued_tasks, get_project
+from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages, metadata_to_db
 from app.libs.rebuilder import getRebuilder, get_latest_log_file
-from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_output_dir
+from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package
 from app.libs.reporter import generate_results
 
 
@@ -68,13 +68,13 @@ class RebuildTask(BaseTask):
 
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
-    for distribution in Config["distribution"].keys():
-        schedule = Config["distribution"][distribution]["schedule"]
-        for dist in Config["distribution"][distribution]["dist"]:
+    for project in Config["project"].keys():
+        schedule = Config["project"][project]["schedule"]
+        for dist in Config["project"][project]["dist"]:
             sender.add_periodic_task(schedule, get.s(dist), name=dist)
 
         # fixme: improve how we expose results
-        sender.add_periodic_task(60, _generate_results.s(distribution))
+        sender.add_periodic_task(60, _generate_results.s(project))
 
 
 @app.task(base=BaseTask)
@@ -111,11 +111,11 @@ def get(dist, force_retry=False):
                         log.debug(f"{package}: already submitted. Skipping.")
                         continue
 
-                # check if metadata exists
+                # check if metadata exists: this should be superseded by _metadata_to_db
                 if not stored_package:
-                    metadata = os.path.join(get_intoto_metadata_output_dir(package), 'metadata')
+                    metadata = os.path.join(get_intoto_metadata_package(package), 'metadata')
                     metadata_unrepr = os.path.join(
-                        get_intoto_metadata_output_dir(package, unreproducible=True), 'metadata')
+                        get_intoto_metadata_package(package, unreproducible=True), 'metadata')
                     if os.path.exists(metadata):
                         package.status = "reproducible"
                     elif os.path.exists(metadata_unrepr):
@@ -148,8 +148,8 @@ def rebuild(package):
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
-    builder = getRebuilder(package=package)
-    package = builder.run()
+    builder = getRebuilder(package.distribution)
+    package = builder.run(package=package)
     result = {"rebuild": [dict(package)]}
     return result
 
@@ -162,9 +162,9 @@ def attest(package):
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
 
-    distribution = get_distribution(package)
-    if not distribution:
-        raise RebuilderExceptionAttest(f"Cannot determine underlying distribution for {package}")
+    project = get_project(package.distribution)
+    if not project:
+        raise RebuilderExceptionAttest(f"Cannot determine underlying project for {package}")
 
     if package.status not in ("reproducible", "unreproducible"):
         raise RebuilderExceptionAttest(f"Cannot determine package status for {package}")
@@ -180,7 +180,7 @@ def attest(package):
     with open(buildinfo) as fd:
         parsed_buildinfo = debian.deb822.BuildInfo(fd)
 
-    gpg_sign_keyid = Config["distribution"].get(distribution, {}).get('in-toto-sign-key-fpr', None)
+    gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
     if gpg_sign_keyid:
         # generate in-toto metadata
         generate_intoto_metadata(package.artifacts, gpg_sign_keyid, parsed_buildinfo)
@@ -190,7 +190,7 @@ def attest(package):
         link = link[0]
 
         # create final output directory
-        outputdir = get_intoto_metadata_output_dir(
+        outputdir = get_intoto_metadata_package(
             package, unreproducible=package.status == "unreproducible")
         os.makedirs(outputdir, exist_ok=True)
         shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
@@ -209,7 +209,7 @@ def attest(package):
                 os.symlink(package.name, binpkg)
     else:
         log.info(f"Unable to sign in-toto metadata: "
-                 f"no GPG keyid provided for distribution '{distribution}.")
+                 f"no GPG keyid provided for project '{project}.")
 
     report.delay(package)
     result = {"attest": [dict(package)]}
@@ -225,8 +225,8 @@ def report(package):
         raise RebuilderExceptionReport from e
 
     # collect log
-    builder = getRebuilder(package=package)
-    output_dir = f"/rebuild/{builder.distribution}"
+    builder = getRebuilder(package.distribution)
+    output_dir = f"/rebuild/{builder.project}"
     log_dir = f"{output_dir}/logs"
     os.makedirs(log_dir, exist_ok=True)
     src_log = f"/artifacts/{builder.distdir}/{package.log}"
@@ -250,7 +250,7 @@ def report(package):
 
 
 @app.task(base=BaseTask)
-def upload(package=None, distribution=None):
+def upload(package=None, project=None):
     try:
         package = BuildPackage.from_dict(package) if package else None
     except KeyError as e:
@@ -262,16 +262,16 @@ def upload(package=None, distribution=None):
     remote_ssh_basedir = Config["common"].get("repo-remote-ssh-basedir", None)
 
     if package:
-        distribution = get_distribution(package)
-        if not distribution:
-            raise RebuilderExceptionUpload(f"Cannot determine underlying distribution for {package}")
+        project = get_project(package.distribution)
+        if not project:
+            raise RebuilderExceptionUpload(f"Cannot determine underlying project for {package}")
 
-    if distribution:
-        ssh_key = Config["distribution"][distribution].get(
+    if project:
+        ssh_key = Config["project"][project].get(
             "repo-ssh-key", ssh_key)
-        remote_ssh_host = Config["distribution"][distribution].get(
+        remote_ssh_host = Config["project"][project].get(
             "repo-remote-ssh-host", remote_ssh_host)
-        remote_ssh_basedir = Config["distribution"][distribution].get(
+        remote_ssh_basedir = Config["project"][project].get(
             "repo-remote-ssh-basedir", remote_ssh_basedir)
 
     try:
@@ -310,10 +310,21 @@ def upload(package=None, distribution=None):
 
 
 @app.task(base=BaseTask)
-def _generate_results(distribution):
+def _generate_results(project):
     # generate plots from results
     try:
-        generate_results(app, distribution)
+        generate_results(app, project)
     except RebuilderException as e:
         log.error(f"Failed to generate plots: {str(e)}")
-    upload.delay(distribution=distribution)
+    upload.delay(project=project)
+
+
+@app.task(base=BaseTask)
+def _metadata_to_db(dist, unreproducible=False):
+    result = {"rebuild": []}
+    try:
+        dist = RebuilderDist(dist)
+        result["rebuild"] = metadata_to_db(app, dist, unreproducible=unreproducible)
+    except Exception as e:
+        log.error(f"Failed to generate DB results: {str(e)}")
+    return result

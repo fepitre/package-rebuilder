@@ -17,7 +17,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-
+import glob
 import os
 import re
 import requests
@@ -33,13 +33,12 @@ except ImportError:
     debian = None
 
 from packaging.version import parse as parse_version
-from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, \
+from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_project, \
     get_backend_tasks, rebuild_task_parser, parse_deb_buildinfo_fname, parse_rpm_buildinfo_fname
 from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
 from app.libs.logger import log
-
-# fixme: clarify terms 'dist', 'name' or 'distribution'. It leads to confusion where dist like in
-#  BuildPackage is 'name'.
+from app.libs.rebuilder import get_latest_log_file
+from app.libs.attester import get_intoto_metadata_basedir
 
 
 def get_rebuilt_packages(app):
@@ -58,48 +57,92 @@ def get_rebuilt_packages(app):
     return rebuilt_packages
 
 
+def metadata_to_db(app, dist, unreproducible=False):
+    result = []
+    # get previous triggered packages builds
+    stored_packages = get_rebuilt_packages(app)
+
+    distribution = dist.distribution
+    arch = dist.arch
+    if DEBIAN.get(dist.distribution):
+        arch = DEBIAN_ARCHES.get(arch, arch)
+
+    metadata_basedir = get_intoto_metadata_basedir(distribution, unreproducible=unreproducible)
+    if not os.path.exists(metadata_basedir):
+        return result
+    for name in os.listdir(metadata_basedir):
+        if not os.path.islink(f"{metadata_basedir}/{name}"):
+            for version in os.listdir(f"{metadata_basedir}/{name}"):
+                buildinfo = glob.glob(f"{metadata_basedir}/{name}/{version}/*.buildinfo")
+                buildinfo = buildinfo[0] if buildinfo else None
+                if buildinfo:
+                    parsed_bn = parse_deb_buildinfo_fname(buildinfo)
+                    if not parsed_bn:
+                        continue
+                    if len(parsed_bn['arch']) > 1:
+                        continue
+                    if parsed_bn['arch'][0] != arch:
+                        continue
+                    package = BuildPackage.from_dict({
+                        "name": parsed_bn["name"],
+                        "version": parsed_bn["version"],
+                        "arch": arch,
+                        "epoch": parsed_bn['epoch'],
+                        "status": "reproducible" if not unreproducible else "unreproducible",
+                        "url": buildinfo,
+                        "distribution": distribution
+                    })
+                    package.log = get_latest_log_file(package)
+                    if not stored_packages.get(str(package), None):
+                        result.append(dict(package))
+    return result
+
+
 class RebuilderDist:
     def __init__(self, dist):
         try:
+            # 'dist' is defined as:
+            #   {distribution}+{package_set_1}+{package_set_2}+...+{package_set_N}.{arch}
+            #  where 'distribution' is the distribution name, 'package_set_*' defines known
+            #  distribution set of packages and 'arch' is architecture.
+
+            # Examples:
             # qubes-4.1-vm-bullseye.amd64
             # qubes-4.1-vm-fc32.noarch
             # sid.all
             # bullseye+essential+build_essential.all
             # fedora-33.amd64
-            self.name, self.arch = dist.rsplit('.', 1)
-        except ValueError:
-            raise RebuilderExceptionDist(f"Cannot parse dist: {dist}.")
 
-        if is_qubes(dist):
-            self.repo = QubesRepository(self.name, self.arch)
-            self.package_sets = ["full"]
-            self.distribution = "qubes"
-        elif is_fedora(dist):
-            self.repo = FedoraRepository(self.name)
-            self.package_sets = []
-            self.distribution = "fedora"
-        elif is_debian(self.name):
-            self.name, package_sets = "{}+".format(self.name).split('+', 1)
+            self.distribution_with_package_sets, self.arch = dist.rsplit('.', 1)
+            self.distribution, package_sets = f"{self.distribution_with_package_sets}+".split('+', 1)
             self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
                                  if pkg_set]
             # If no package set is provided, we understand it as "full"
             if not self.package_sets:
                 self.package_sets = ["full"]
-            self.distribution = "debian"
-            self.repo = DebianRepository(self.name, self.arch, self.package_sets)
+            self.project = get_project(self.distribution)
+        except ValueError:
+            raise RebuilderExceptionDist(f"Cannot parse dist: {dist}.")
+
+        if is_qubes(self.distribution):
+            self.repo = QubesRepository(self.distribution, self.arch)
+        elif is_fedora(self.distribution):
+            self.repo = FedoraRepository(self.distribution)
+        elif is_debian(self.distribution):
+            self.repo = DebianRepository(self.distribution, self.arch, self.package_sets)
         else:
             raise RebuilderExceptionDist(f"Unsupported distribution: {dist}")
 
     def __repr__(self):
-        result = f'{self.name}.{self.arch}'
+        result = f'{self.distribution}.{self.arch}'
         return result
 
 
 class BuildPackage(dict):
-    def __init__(self, name, epoch, version, arch, dist, url,
+    def __init__(self, name, epoch, version, arch, distribution, url,
                  artifacts="", status="", log="", retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
-                      dist=dist, url=url, artifacts=artifacts, status=status,
+                      distribution=distribution, url=url, artifacts=artifacts, status=status,
                       log=log, retries=retries)
 
     def __getattr__(self, item):
@@ -109,7 +152,7 @@ class BuildPackage(dict):
         self[key] = value
 
     def __repr__(self):
-        result = f'{self.dist}-{self.name}-{self.version}.{self.arch}'
+        result = f'{self.name}-{self.version}.{self.arch}'
         if self.epoch and self.epoch != 0:
             result = f'{self.epoch}:{result}'
         return result
@@ -123,29 +166,29 @@ class BuildPackage(dict):
 
 
 class FedoraRepository:
-    def __init__(self, dist):
+    def __init__(self, distribution):
         pass
 
 
 class DebianRepository:
-    def __init__(self, dist, arch, package_sets):
-        self.dist = dist
+    def __init__(self, distribution, arch, package_sets):
+        self.distribution = distribution
         self.arch = DEBIAN_ARCHES.get(arch, arch)
         self.package_sets = package_sets
         self.packages = None
         try:
-            if is_debian(self.dist):
+            if is_debian(self.distribution):
                 if debian is None:
-                    raise RebuilderExceptionGet(f"Cannot build {self.dist}: python-debian not found")
+                    raise RebuilderExceptionGet(f"Cannot build {self.distribution}: python-debian not found")
             else:
-                raise RebuilderExceptionGet(f"Unknown dist: {self.dist}")
+                raise RebuilderExceptionGet(f"Unknown dist: {self.distribution}")
         except (ValueError, FileNotFoundError) as e:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
 
     def get_package_names_in_debian_set(self, pkgset_name):
         packages = []
         url = f"https://jenkins.debian.net/userContent/reproducible/" \
-              f"debian/pkg-sets/{self.dist}/{pkgset_name}.pkgset"
+              f"debian/pkg-sets/{self.distribution}/{pkgset_name}.pkgset"
         try:
             resp = requests.get(url)
             if resp.ok:
@@ -157,7 +200,7 @@ class DebianRepository:
 
     def get_buildinfo_files(self, arch):
         files = []
-        url = f"https://buildinfos.debian.net/buildinfo-pool_{self.dist}_{arch}.list"
+        url = f"https://buildinfos.debian.net/buildinfo-pool_{self.distribution}_{arch}.list"
         try:
             resp = requests.get(url)
             if not resp.ok:
@@ -189,7 +232,7 @@ class DebianRepository:
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],
                 arch=self.arch,
-                dist=self.dist,
+                distribution=self.distribution,
                 url=f
             )
             packages[parsed_bn['name']].append(rebuild)
@@ -224,20 +267,20 @@ class DebianRepository:
 class QubesRepository:
     def __init__(self, qubes_dist, arch):
         self.qubes_dist = qubes_dist
-        self.dist = None
+        self.distribution = None
         self.arch = arch
         self.packages = None
         try:
-            self.release, self.package_set, self.dist = \
+            self.release, self.package_set, self.distribution = \
                 qubes_dist.lstrip('qubes-').split('-', 2)
-            if is_fedora(self.dist):
+            if is_fedora(self.distribution):
                 if not koji:
                     raise RebuilderExceptionGet(
-                        f"Cannot build {self.dist}: python-koji not found")
-            elif is_debian(self.dist):
+                        f"Cannot build {self.distribution}: python-koji not found")
+            elif is_debian(self.distribution):
                 if not debian:
                     raise RebuilderExceptionGet(
-                        f"Cannot build {self.dist}: python-debian not found")
+                        f"Cannot build {self.distribution}: python-debian not found")
         except ValueError as e:
             raise RebuilderExceptionGet(
                 f"Failed to parse dist repository: {str(e)}")
@@ -262,10 +305,10 @@ class QubesRepository:
         files = []
         qubes_rsync_baseurl = "rsync://ftp.qubes-os.org/qubes-mirror/repo"
         try:
-            if is_fedora(self.dist):
+            if is_fedora(self.distribution):
                 for repo in ["current", "current-testing", "security-testing"]:
                     baseurl = f"{qubes_rsync_baseurl}/yum"
-                    relurl = f"r{self.release}/{repo}/{self.package_set}/{self.dist}"
+                    relurl = f"r{self.release}/{repo}/{self.package_set}/{self.distribution}"
                     url = f"{baseurl}/{relurl}/"
                     # WIP: wait for Fedora to merge RPM PR
                     remote_files = [os.path.join(relurl, f)
@@ -274,7 +317,7 @@ class QubesRepository:
                                     re.match(r".*-buildinfo.*\.rpm", f)]
                     files += [os.path.join("https://yum.qubes-os.org", f)
                               for f in remote_files]
-            elif is_debian(self.dist):
+            elif is_debian(self.distribution):
                 baseurl = f"{qubes_rsync_baseurl}/deb"
                 relurl = f"r{self.release}/vm"
                 url = f"{baseurl}/{relurl}/"
@@ -284,7 +327,7 @@ class QubesRepository:
                 files = [os.path.join("https://deb.qubes-os.org", f)
                          for f in files]
             else:
-                raise RebuilderExceptionGet(f"Unknown dist: {self.dist}")
+                raise RebuilderExceptionGet(f"Unknown dist: {self.distribution}")
         except (ValueError, FileNotFoundError) as e:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
         return files
@@ -293,13 +336,13 @@ class QubesRepository:
         packages = {}
         latest_packages = []
         for f in self.get_buildinfo_files():
-            if is_fedora(self.dist):
+            if is_fedora(self.distribution):
                 parsed_bn = parse_rpm_buildinfo_fname(f)
                 if not parsed_bn:
                     continue
                 if parsed_bn['arch'] not in ("noarch", self.arch):
                     continue
-            elif is_debian(self.dist):
+            elif is_debian(self.distribution):
                 parsed_bn = parse_deb_buildinfo_fname(f)
                 if not parsed_bn:
                     continue
@@ -308,7 +351,7 @@ class QubesRepository:
                 self.arch = DEBIAN_ARCHES.get(self.arch, self.arch)
                 if parsed_bn['arch'][0] != self.arch:
                     continue
-                if '+deb{}u'.format(DEBIAN.get(self.dist)) not in \
+                if '+deb{}u'.format(DEBIAN.get(self.distribution)) not in \
                         parsed_bn['version']:
                     continue
             else:
@@ -320,7 +363,7 @@ class QubesRepository:
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],
                 arch=self.arch,
-                dist=self.qubes_dist,
+                distribution=self.qubes_dist,
                 url=f,
             )
             packages[parsed_bn['name']].append(rebuild)

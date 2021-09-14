@@ -47,8 +47,13 @@ def generate_intoto_metadata(output, gpg_sign_keyid, buildinfo):
         raise RebuilderExceptionAttest(f"in-toto metadata generation failed: {str(e)}")
 
 
-def get_intoto_metadata_output_dir(package, unreproducible=False):
-    builder = getRebuilder(package=package)
+def get_intoto_metadata_basedir(distribution, unreproducible=False):
+    builder = getRebuilder(distribution)
     output_dir = f"/rebuild/{builder.distdir}"
     sources = 'unreproducible/sources' if unreproducible else 'sources'
-    return f"{output_dir}/{sources}/{package.name}/{package.version}"
+    return f"{output_dir}/{sources}"
+
+
+def get_intoto_metadata_package(package, unreproducible=False):
+    basedir = get_intoto_metadata_basedir(package.distribution, unreproducible=unreproducible)
+    return f"{basedir}/{package.name}/{package.version}"

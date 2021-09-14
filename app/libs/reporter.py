@@ -100,14 +100,14 @@ def generate_results(app, distribution):
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]
     try:
-        for dist in Config["distribution"][distribution]["dist"]:
+        for dist in Config["project"][distribution]["dist"]:
             dist = RebuilderDist(dist)
-            results_path = f"/rebuild/{dist.distribution}/results"
+            results_path = f"/rebuild/{dist.project}/results"
             os.makedirs(results_path, exist_ok=True)
 
             # Get results for given dist
             results = [x for x in rebuild_results.values()
-                       if x['dist'] == dist.name and x['arch'] == dist.arch]
+                       if x['distribution'] == dist.distribution and x['arch'] == dist.arch]
 
             # Filter latest results
             latest_results = {}
@@ -180,24 +180,24 @@ def generate_results(app, distribution):
                     labeldistance=1.1)
                 ax.legend(wedges, legends, title="Status", loc="center left",
                           bbox_to_anchor=(1, 0, 0.5, 1))
-                ax.set(aspect="equal", title=f"{dist.name}+{pkgset_name}.{dist.arch}")
+                ax.set(aspect="equal", title=f"{dist.distribution}+{pkgset_name}.{dist.arch}")
                 for idx, text in enumerate(texts):
                     text.set_color(colors[idx])
-                fig.savefig(f"{results_path}/{dist.name}_{pkgset_name}.{dist.arch}.png",
+                fig.savefig(f"{results_path}/{dist.distribution}_{pkgset_name}.{dist.arch}.png",
                             bbox_inches='tight')
                 plt.close(fig)
 
-                plots[pkgset_name] = f"{dist.name}_{pkgset_name}.{dist.arch}.png"
+                plots[pkgset_name] = f"{dist.distribution}_{pkgset_name}.{dist.arch}.png"
 
                 with open(f"{results_path}/{dist}.json", "w") as fd:
                     fd.write(json.dumps(result, indent=2) + "\n")
 
             data = {
-                "dist": f"{dist.distribution} {dist.name} ({dist.arch})",
+                "dist": f"{dist.project} {dist.distribution} ({dist.arch})",
                 "packages": packages_list,
                 "plots": plots
             }
-            with open(f"{results_path}/{dist.name}.{dist.arch}.html", 'w') as fd:
+            with open(f"{results_path}/{dist.distribution}.{dist.arch}.html", 'w') as fd:
                 fd.write(HTML_TEMPLATE.render(**data))
 
     except Exception as e:

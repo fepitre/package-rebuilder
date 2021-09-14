@@ -26,7 +26,7 @@ import tempfile
 import glob
 
 from app.config.config import Config
-from app.libs.common import is_qubes, is_debian, is_fedora
+from app.libs.common import is_qubes, is_debian, is_fedora, get_project
 from app.libs.exceptions import RebuilderExceptionBuild
 
 
@@ -34,77 +34,77 @@ from app.libs.exceptions import RebuilderExceptionBuild
 #       from debrebuild and rpmreproduce
 
 
-def getRebuilder(package, **kwargs):
-    if is_qubes(package.dist):
-        qubes_release, package_set, dist = \
-            package.dist.lstrip('qubes-').split('-', 2)
-        if is_debian(dist):
+def getRebuilder(distribution, **kwargs):
+    if is_qubes(distribution):
+        # In the case of QubesOS distribution is the underlying TemplateVM
+        qubes_release, package_set, distribution = distribution.lstrip('qubes-').split('-', 2)
+        if is_debian(distribution):
             rebuilder = QubesRebuilderDEB(
-                package,
-                snapshot_query_url=Config["distribution"].get("qubesos", {})['snapshot'],
-                snapshot_mirror=Config["distribution"].get("qubesos", {})['snapshot'],
+                qubes_release=qubes_release,
+                package_set=package_set,
+                distribution=distribution,
+                snapshot_query_url=Config["project"].get("qubesos", {})['snapshot'],
+                snapshot_mirror=Config["project"].get("qubesos", {})['snapshot'],
                 **kwargs
             )
-        elif is_fedora(dist):
-            rebuilder = QubesRebuilderRPM(package, **kwargs)
+        elif is_fedora(distribution):
+            rebuilder = QubesRebuilderRPM(distribution, **kwargs)
         else:
-            raise RebuilderExceptionBuild(
-                f"Unsupported Qubes distribution: {package.dist}")
-    elif is_fedora(package.dist):
-        rebuilder = FedoraRebuilder(package, **kwargs)
-    elif is_debian(package.dist):
+            raise RebuilderExceptionBuild(f"Unsupported Qubes distribution: {distribution}")
+    elif is_fedora(distribution):
+        rebuilder = FedoraRebuilder(distribution, **kwargs)
+    elif is_debian(distribution):
         rebuilder = DebianRebuilder(
-            package,
-            snapshot_query_url=Config["distribution"].get("debian", {})['snapshot'],
-            snapshot_mirror=Config["distribution"].get("debian", {})['snapshot'],
+            distribution,
+            snapshot_query_url=Config["project"].get("debian", {})['snapshot'],
+            snapshot_mirror=Config["project"].get("debian", {})['snapshot'],
             **kwargs
         )
     else:
-        raise RebuilderExceptionBuild(
-            f"Unsupported distribution: {package.dist}")
+        raise RebuilderExceptionBuild(f"Unsupported distribution: {distribution}")
     return rebuilder
 
 
 def get_latest_log_file(package):
-    builder = getRebuilder(package)
-    output_dir = f"/rebuild/{builder.distribution}"
+    builder = getRebuilder(package.distribution)
+    output_dir = f"/rebuild/{builder.project}"
     pkg_log_files = glob.glob(f"{output_dir}/logs/{package}-*.log")
     pkg_log_files = sorted([os.path.basename(f) for f in pkg_log_files], reverse=True)
     return pkg_log_files[0] if pkg_log_files else ""
 
 
 class BaseRebuilder:
-    def __init__(self, package, **kwargs):
-        self.package = package
+    def __init__(self, distribution, **kwargs):
+        self.distribution = distribution
         self.sign_keyid = kwargs.get('sign_keyid', None)
-        self.logfile = f"{package}-{str(int(time.time()))}.log"
         self.artifacts_dir = "/artifacts"
 
-    def gen_temp_dir(self):
+    @staticmethod
+    def gen_temp_dir(package):
         tempdir = tempfile.mkdtemp(
-            prefix=f"{self.package.name}-{self.package.version}",
+            prefix=f"{package.name}-{package.version}",
         )
         return tempdir
 
 
 class FedoraRebuilder:
-    def __init__(self, package, **kwargs):
+    def __init__(self, distribution, **kwargs):
         pass
 
 
 class DebianRebuilder(BaseRebuilder):
-    def __init__(self, package, **kwargs):
-        super().__init__(package, **kwargs)
-        self.distribution = f"debian"
-        self.distdir = self.distribution
-        self.basedir = f"{self.artifacts_dir}/{self.distdir}"
+    def __init__(self, distribution, **kwargs):
+        super().__init__(distribution, **kwargs)
+        self.project = "debian"
+        self.distdir = self.project
+        self.basedir = f"{self.artifacts_dir}/{self.project}"
         self.snapshot_query_url = kwargs.get(
             'snapshot_query_url', 'http://snapshot.notset.fr')
         self.snapshot_mirror = kwargs.get(
             'snapshot_mirror', "http://snapshot.notset.fr")
         self.extra_build_args = None
 
-    def debrebuild(self, tempdir):
+    def debrebuild(self, tempdir, package):
         # WIP: use internal Rebuilder class instead of wrapping through shell
         build_cmd = [
             "python3",
@@ -120,7 +120,7 @@ class DebianRebuilder(BaseRebuilder):
             build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
         if self.extra_build_args:
             build_cmd += self.extra_build_args
-        build_cmd += [self.package.url]
+        build_cmd += [package.url]
 
         # rebuild
         env = os.environ.copy()
@@ -128,12 +128,13 @@ class DebianRebuilder(BaseRebuilder):
                                 stderr=subprocess.STDOUT, env=env)
         return result, build_cmd
 
-    def run(self):
+    def run(self, package):
+        logfile = f"{package}-{str(int(time.time()))}.log"
         try:
-            tempdir = self.gen_temp_dir()
-            result, build_cmd = self.debrebuild(tempdir)
+            tempdir = self.gen_temp_dir(package)
+            result, build_cmd = self.debrebuild(tempdir, package)
 
-            logfile = f'{self.basedir}/{self.logfile}'
+            logfile = f'{self.basedir}/{logfile}'
             os.makedirs(os.path.dirname(logfile), exist_ok=True)
             with open(logfile, 'wb') as fd:
                 fd.write(result.stdout)
@@ -146,40 +147,38 @@ class DebianRebuilder(BaseRebuilder):
                 shutil.copy2(f, artifactsdir)
             if tempdir and os.path.exists(tempdir):
                 shutil.rmtree(tempdir)
-            self.package.artifacts = artifactsdir
+            package.artifacts = artifactsdir
 
             # This is for recording logfile entry into DB
-            self.package.log = self.logfile
+            package.log = os.path.basename(logfile)
 
             if result.returncode == 0:
-                self.package.status = "reproducible"
+                package.status = "reproducible"
             elif result.returncode == 2:
-                self.package.status = "unreproducible"
+                package.status = "unreproducible"
             else:
-                self.package.status = "failure"
+                package.status = "failure"
 
             if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(
                     result.returncode, build_cmd)
 
-            return self.package
+            return package
         except (subprocess.CalledProcessError, FileNotFoundError,
                 FileExistsError, IndexError, OSError):
-            raise RebuilderExceptionBuild([dict(self.package)])
+            raise RebuilderExceptionBuild([dict(package)])
 
 
 class QubesRebuilderRPM(FedoraRebuilder):
-    def __init__(self, package, **kwargs):
-        super().__init__(package, **kwargs)
+    def __init__(self, qubes_release, package_set, distribution, **kwargs):
+        super().__init__(distribution, **kwargs)
 
 
 class QubesRebuilderDEB(DebianRebuilder):
-    def __init__(self, package, **kwargs):
-        super().__init__(package, **kwargs)
-        qubes_release, package_set, _ = \
-            package.dist.lstrip('qubes-').split('-', 2)
-        self.distribution = "qubes"
-        self.distdir = f"{self.distribution}/deb/r{qubes_release}/{package_set}"
+    def __init__(self, qubes_release, package_set, distribution, **kwargs):
+        super().__init__(distribution, **kwargs)
+        self.project = "qubesos"
+        self.distdir = f"{self.project}/deb/r{qubes_release}/{package_set}"
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"
         self.extra_build_args = [
             "--gpg-verify",

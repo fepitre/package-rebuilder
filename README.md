@@ -204,7 +204,7 @@ broker = redis://broker:6379/0
 backend = mongodb://backend:27017
 
 #
-# Each option in 'common' section can be set per distribution section
+# Each option in 'common' section can be set per project distribution section
 #
 [common]
 
