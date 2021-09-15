@@ -152,7 +152,7 @@ def get_celery_unacked_tasks(app):
     return submitted_tasks
 
 
-def get_backend_tasks(app):
+def get_backend_tasks(app, with_id=False):
     backend = app.backend
     col = backend.collection.find()
     results = []
@@ -163,6 +163,8 @@ def get_backend_tasks(app):
             if f == 'result' and isinstance(doc[f], str):
                 value = json.loads(doc[f])
             r[f] = value
+        if with_id:
+            r["_id"] = doc["_id"]
         results.append(r)
     return results
 
