@@ -250,7 +250,7 @@ def report(package):
 
 
 @app.task(base=BaseTask)
-def upload(package=None, project=None):
+def upload(package=None, project=None, upload_results=False):
     try:
         package = BuildPackage.from_dict(package) if package else None
     except KeyError as e:
@@ -263,22 +263,27 @@ def upload(package=None, project=None):
 
     if package:
         project = get_project(package.distribution)
-        if not project:
-            raise RebuilderExceptionUpload(f"Cannot determine underlying project for {package}")
 
-    if project:
-        ssh_key = Config["project"][project].get(
-            "repo-ssh-key", ssh_key)
-        remote_ssh_host = Config["project"][project].get(
-            "repo-remote-ssh-host", remote_ssh_host)
-        remote_ssh_basedir = Config["project"][project].get(
-            "repo-remote-ssh-basedir", remote_ssh_basedir)
+    if not project:
+        raise RebuilderExceptionUpload(f"Cannot determine underlying project for {package}")
+
+    ssh_key = Config["project"][project].get(
+        "repo-ssh-key", ssh_key)
+    remote_ssh_host = Config["project"][project].get(
+        "repo-remote-ssh-host", remote_ssh_host)
+    remote_ssh_basedir = Config["project"][project].get(
+        "repo-remote-ssh-basedir", remote_ssh_basedir)
 
     try:
         if ssh_key and remote_ssh_host and remote_ssh_basedir:
             # pay attention to latest "/", we use rsync!
-            dir_to_upload = ["/rebuild/"]
-
+            dir_to_upload = []
+            if package:
+                metadata_path = get_intoto_metadata_package(
+                    package, unreproducible=package.status == "unreproducible")
+                dir_to_upload.append(f"{metadata_path}/")
+            if upload_results:
+                dir_to_upload.append(f"/rebuild/{project}/results/")
             for local_dir in dir_to_upload:
                 # fixme: maybe ssh keyword is useless: someone could
                 #  serve a local mirror directly
@@ -316,7 +321,7 @@ def _generate_results(project):
         generate_results(app, project)
     except RebuilderException as e:
         log.error(f"Failed to generate plots: {str(e)}")
-    upload.delay(project=project)
+    upload.delay(project=project, upload_results=True)
 
 
 @app.task(base=BaseTask)
