@@ -29,7 +29,7 @@ from jinja2 import Template
 from app.libs.common import get_celery_active_tasks
 from app.config.config import Config
 from app.libs.exceptions import RebuilderException
-from app.libs.getter import RebuilderDist, get_rebuilt_packages, getPackage
+from app.libs.getter import RebuilderDist, get_rebuild_packages, getPackage
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
@@ -95,7 +95,7 @@ def func(pct, allvals):
 
 
 def generate_results(app, distribution):
-    rebuild_results = get_rebuilt_packages(app)
+    rebuild_results = get_rebuild_packages(app)
     running_rebuilds = [getPackage(p)
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]

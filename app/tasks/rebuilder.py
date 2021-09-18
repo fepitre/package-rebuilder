@@ -31,7 +31,7 @@ from app.libs.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
 from app.libs.common import get_celery_queued_tasks, get_project
-from app.libs.getter import getPackage, RebuilderDist, get_rebuilt_packages, metadata_to_db
+from app.libs.getter import getPackage, RebuilderDist, get_rebuild_packages, metadata_to_db
 from app.libs.rebuilder import getRebuilder, get_latest_log_file
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package
 from app.libs.reporter import generate_results
@@ -91,7 +91,7 @@ def get(dist, force_retry=False):
                 log.debug(f"No packages found for {dist}")
 
             # get previous triggered packages builds
-            stored_packages = get_rebuilt_packages(app)
+            stored_packages = get_rebuild_packages(app)
 
             # queued packages to be rebuilt
             rebuild_queued_tasks = get_celery_queued_tasks(app, "rebuild")

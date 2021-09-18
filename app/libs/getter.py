@@ -41,7 +41,7 @@ from app.libs.rebuilder import get_latest_log_file
 from app.libs.attester import get_intoto_metadata_basedir
 
 
-def get_rebuilt_packages(app):
+def get_rebuild_packages(app):
     rebuilt_packages = {}
     parsed_packages = []
     tasks = get_backend_tasks(app)
@@ -60,7 +60,7 @@ def get_rebuilt_packages(app):
 def metadata_to_db(app, dist, unreproducible=False):
     result = []
     # get previous triggered packages builds
-    stored_packages = get_rebuilt_packages(app)
+    stored_packages = get_rebuild_packages(app)
 
     distribution = dist.distribution
     arch = dist.arch
