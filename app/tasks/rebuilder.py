@@ -42,7 +42,7 @@ from app.libs.reporter import generate_results
 # fixme: improve serialize/deserialize Package
 
 class BaseTask(celery.Task):
-    autoretry_for = (RebuilderExceptionBuild,)
+    autoretry_for = (RebuilderExceptionBuild, RebuilderExceptionAttest,)
     throws = (RebuilderException,)
     max_retries = Config["celery"]["max_retries"]
     # Let snapshot service to get the latest data from official repositories
@@ -168,7 +168,12 @@ def attest(package):
     with open(buildinfo) as fd:
         parsed_buildinfo = debian.deb822.BuildInfo(fd)
 
-    gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
+    if package.status == "reproducible":
+        gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
+    elif package.status == "unreproducible":
+        gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-unreproducible-fpr', None)
+    else:
+        raise RebuilderExceptionAttest(f"Unknown status: {package.status}")
     if gpg_sign_keyid:
         # generate in-toto metadata
         generate_intoto_metadata(package.artifacts, gpg_sign_keyid, parsed_buildinfo)
@@ -196,7 +201,7 @@ def attest(package):
             if not os.path.exists(binpkg):
                 os.symlink(package.name, binpkg)
     else:
-        log.info(f"Unable to sign in-toto metadata: "
+        log.info(f"Unable to sign in-toto {package.status} metadata: "
                  f"no GPG keyid provided for project '{project}.")
 
     report.delay(package)

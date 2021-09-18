@@ -135,11 +135,20 @@ $ mkdir -p /var/lib/rebuilder/{rebuild,broker,backend,ssh,gnupg}
 The previously created folders are mounted differently into containers to store or share persistent data
 (see `/opt/rebuilder/docker-compose.yml`).
 
-In `gnupg` folder you need to provide a GPG keyring containing private key used to sign `in-toto` metadata if you plan
-to generate them. If you have created key pair, say `rebuild.asc.priv` and `rebuild.asc.pub`, you need to generate the
-keyring as follows:
+In `gnupg` folder you need to provide a GPG keyring containing private keys used to sign `in-toto` metadata and
+unreproducible `in-toto` metadata if you plan to generate them. Two keys are necessary to certify a proper separation
+between reproducible and unreproducible cases. In practice, users would only trust the key used to sign reproducible
+metadata. Both keys will be used by the underlying project people to track the general status of packages.
+
+If you want to create fresh keys directly, repeat the following operation two times by properly identify which one
+would be the reproducible key from the unreproducible one:
 ```
-$ GNUPGHOME=/var/lib/rebuilder/gnupg gpg --import rebuild.asc.priv rebuild.asc.pub
+$ GNUPGHOME=/var/lib/rebuilder/gnupg gpg --full-generate-key
+```
+
+Then, don't forget to publish your keys as follows (replace by corresponding fingerprints):
+```
+$ GNUPGHOME=/var/lib/rebuidler/gnupg gpg --keyserver keyserver.ubuntu.com --send-keys REPRODUCIBLE_KEY_FINGERPRINT UNREPRODUCIBLE_KEY_FINGERPRINT
 ```
 
 In `ssh` folder you need to add a private SSH key allowed to push on a remote host destination via `rsync`. Ensure to
@@ -174,6 +183,7 @@ schedule_generate_results = 300
 # local keyring: /var/lib/rebuilder/gnupg
 # container keyring: /root/.gnupg
 in-toto-sign-key-fpr = 0123456789ABCDEF
+in-toto-sign-key-unreproducible-fpr = FEDCBA987654321
 
 # SSH private key name to use for accessing remote host
 # local path: /var/lib/rebuilder/ssh/id_rsa
@@ -220,6 +230,7 @@ schedule_generate_results = 300
 # local keyring: /var/lib/rebuilder/gnupg
 # container keyring: /root/.gnupg
 in-toto-sign-key-fpr = 8DEB0BEF1D99FEB8B9A90FB192EF6D6141641E5C
+in-toto-sign-key-unreproducible-fpr = C46AE96200D2F98FFDD8257073D2D5D1AEA68333
 
 # SSH private key name to use for accessing remote host
 # local path: /var/lib/rebuilder/ssh/id_rsa

@@ -35,8 +35,9 @@ SUPPORTED_PROJECTS = ["qubesos", "debian", "fedora"]
 
 # Filter allowed options in sections for projects (e.g. 'common', 'qubesos', 'debian', etc.)
 SECTION_OPTIONS = [
-    "schedule_get", "snapshot", "in-toto-sign-key-fpr", "repo-ssh-key",
-    "repo-remote-ssh-host", "repo-remote-ssh-basedir", "dist", "schedule_generate_results"
+    "schedule_get", "snapshot", "in-toto-sign-key-fpr", "in-toto-sign-key-unreproducible-fpr",
+    "repo-ssh-key", "repo-remote-ssh-host", "repo-remote-ssh-basedir", "dist",
+    "schedule_generate_results"
 ]
 
 
