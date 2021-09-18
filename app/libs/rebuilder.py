@@ -42,20 +42,18 @@ def getRebuilder(distribution, **kwargs):
             rebuilder = QubesRebuilderDEB(
                 qubes_release=qubes_release,
                 package_set=package_set,
-                distribution=distribution,
                 snapshot_query_url=Config["project"].get("qubesos", {})['snapshot'],
                 snapshot_mirror=Config["project"].get("qubesos", {})['snapshot'],
                 **kwargs
             )
         elif is_fedora(distribution):
-            rebuilder = QubesRebuilderRPM(distribution, **kwargs)
+            rebuilder = QubesRebuilderRPM(**kwargs)
         else:
             raise RebuilderExceptionBuild(f"Unsupported Qubes distribution: {distribution}")
     elif is_fedora(distribution):
-        rebuilder = FedoraRebuilder(distribution, **kwargs)
+        rebuilder = FedoraRebuilder(**kwargs)
     elif is_debian(distribution):
         rebuilder = DebianRebuilder(
-            distribution,
             snapshot_query_url=Config["project"].get("debian", {})['snapshot'],
             snapshot_mirror=Config["project"].get("debian", {})['snapshot'],
             **kwargs
@@ -74,8 +72,7 @@ def get_latest_log_file(package):
 
 
 class BaseRebuilder:
-    def __init__(self, distribution, **kwargs):
-        self.distribution = distribution
+    def __init__(self, **kwargs):
         self.sign_keyid = kwargs.get('sign_keyid', None)
         self.artifacts_dir = "/artifacts"
 
@@ -88,13 +85,13 @@ class BaseRebuilder:
 
 
 class FedoraRebuilder:
-    def __init__(self, distribution, **kwargs):
+    def __init__(self, **kwargs):
         pass
 
 
 class DebianRebuilder(BaseRebuilder):
-    def __init__(self, distribution, **kwargs):
-        super().__init__(distribution, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.project = "debian"
         self.distdir = self.project
         self.basedir = f"{self.artifacts_dir}/{self.project}"
@@ -170,13 +167,13 @@ class DebianRebuilder(BaseRebuilder):
 
 
 class QubesRebuilderRPM(FedoraRebuilder):
-    def __init__(self, qubes_release, package_set, distribution, **kwargs):
-        super().__init__(distribution, **kwargs)
+    def __init__(self, qubes_release, package_set, **kwargs):
+        super().__init__(**kwargs)
 
 
 class QubesRebuilderDEB(DebianRebuilder):
-    def __init__(self, qubes_release, package_set, distribution, **kwargs):
-        super().__init__(distribution, **kwargs)
+    def __init__(self, qubes_release, package_set, **kwargs):
+        super().__init__(**kwargs)
         self.project = "qubesos"
         self.distdir = f"{self.project}/deb/r{qubes_release}/{package_set}"
         self.basedir = f"{self.artifacts_dir}/{self.distdir}"

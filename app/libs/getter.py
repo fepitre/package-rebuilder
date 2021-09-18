@@ -49,7 +49,7 @@ def get_rebuilt_packages(app):
         parsed_task = rebuild_task_parser(task)
         if parsed_task:
             for p in parsed_task:
-                package = BuildPackage.from_dict(p)
+                package = getPackage(p)
                 parsed_packages.append(package)
     # create dict to help into getting package info faster
     for p in sorted(parsed_packages, key=lambda x: str(x)):
@@ -83,7 +83,7 @@ def metadata_to_db(app, dist, unreproducible=False):
                         continue
                     if parsed_bn['arch'][0] != arch:
                         continue
-                    package = BuildPackage.from_dict({
+                    package = getPackage({
                         "name": parsed_bn["name"],
                         "version": parsed_bn["version"],
                         "arch": arch,
@@ -138,7 +138,22 @@ class RebuilderDist:
         return result
 
 
-class BuildPackage(dict):
+def getPackage(package_as_dict):
+    distribution = package_as_dict.get("distribution", None)
+    if not distribution:
+        raise RebuilderExceptionGet(f"Cannot find distribution for: {package_as_dict}")
+    if is_qubes(distribution):
+        package = QubesPackage.from_dict(package_as_dict)
+    elif is_fedora(distribution):
+        package = FedoraPackage.from_dict(package_as_dict)
+    elif is_debian(distribution):
+        package = DebianPackage.from_dict(package_as_dict)
+    else:
+        raise RebuilderExceptionGet(f"Unsupported distribution: {distribution}")
+    return package
+
+
+class Package(dict):
     def __init__(self, name, epoch, version, arch, distribution, url,
                  artifacts="", status="", log="", retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
@@ -163,6 +178,26 @@ class BuildPackage(dict):
     @classmethod
     def from_dict(cls, pkg):
         return cls(**pkg)
+
+
+class DebianPackage(Package):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+class FedoraPackage(Package):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+class QubesPackage(Package):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __repr__(self):
+        result = super().__repr__()
+        result = f'{self.distribution}_{result}'
+        return result
 
 
 class FedoraRepository:
@@ -227,7 +262,7 @@ class DebianRepository:
                 continue
             if parsed_bn['arch'][0] != self.arch:
                 continue
-            rebuild = BuildPackage(
+            rebuild = Package(
                 name=parsed_bn['name'],
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],
@@ -271,6 +306,8 @@ class QubesRepository:
         self.arch = arch
         self.packages = None
         try:
+            # fixme: clarify package_set being dom0/vm and packages set being pre-defined list
+            #  of packages elsewhere.
             self.release, self.package_set, self.distribution = \
                 qubes_dist.lstrip('qubes-').split('-', 2)
             if is_fedora(self.distribution):
@@ -358,7 +395,7 @@ class QubesRepository:
                 continue
             if not packages.get(parsed_bn['name'], []):
                 packages[parsed_bn['name']] = []
-            rebuild = BuildPackage(
+            rebuild = QubesPackage(
                 name=parsed_bn['name'],
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],

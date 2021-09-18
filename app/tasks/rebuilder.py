@@ -31,7 +31,7 @@ from app.libs.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
 from app.libs.common import get_celery_queued_tasks, get_project
-from app.libs.getter import BuildPackage, RebuilderDist, get_rebuilt_packages, metadata_to_db
+from app.libs.getter import getPackage, RebuilderDist, get_rebuilt_packages, metadata_to_db
 from app.libs.rebuilder import getRebuilder, get_latest_log_file
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package
 from app.libs.reporter import generate_results
@@ -145,7 +145,7 @@ def get(dist, force_retry=False):
 @app.task(base=RebuildTask)
 def rebuild(package):
     try:
-        package = BuildPackage.from_dict(package)
+        package = getPackage(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
@@ -158,7 +158,7 @@ def rebuild(package):
 @app.task(base=BaseTask)
 def attest(package):
     try:
-        package = BuildPackage.from_dict(package)
+        package = getPackage(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
@@ -220,7 +220,7 @@ def attest(package):
 @app.task(base=BaseTask)
 def report(package):
     try:
-        package = BuildPackage.from_dict(package)
+        package = getPackage(package)
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionReport from e
@@ -253,7 +253,7 @@ def report(package):
 @app.task(base=BaseTask)
 def upload(package=None, project=None, upload_results=False):
     try:
-        package = BuildPackage.from_dict(package) if package else None
+        package = getPackage(package) if package else None
     except KeyError as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionUpload from e

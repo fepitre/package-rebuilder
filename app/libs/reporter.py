@@ -29,7 +29,7 @@ from jinja2 import Template
 from app.libs.common import get_celery_active_tasks
 from app.config.config import Config
 from app.libs.exceptions import RebuilderException
-from app.libs.getter import RebuilderDist, get_rebuilt_packages, BuildPackage
+from app.libs.getter import RebuilderDist, get_rebuilt_packages, getPackage
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
@@ -96,7 +96,7 @@ def func(pct, allvals):
 
 def generate_results(app, distribution):
     rebuild_results = get_rebuilt_packages(app)
-    running_rebuilds = [BuildPackage.from_dict(p)
+    running_rebuilds = [getPackage(p)
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]
     try:
@@ -142,7 +142,7 @@ def generate_results(app, distribution):
                         package["badge"] = BADGES["running"]
                         result["running"].append(package)
                     elif latest_results.get(package.name, {}):
-                        pkg = BuildPackage.from_dict(latest_results[package.name])
+                        pkg = getPackage(latest_results[package.name])
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             if pkg.log and os.path.basename(pkg.log):
                                 pkg.log = f'../logs/{os.path.basename(pkg.log)}'
