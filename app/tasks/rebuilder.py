@@ -270,7 +270,7 @@ def upload(package=None, project=None, upload_results=False):
     try:
         if ssh_key and remote_ssh_host and remote_ssh_basedir:
             # pay attention to latest "/", we use rsync!
-            dir_to_upload = []
+            dir_to_upload = [f"/rebuild/{project}/logs/"]
             if package:
                 metadata_path = get_intoto_metadata_package(
                     package, unreproducible=package.status == "unreproducible")
