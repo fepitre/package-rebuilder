@@ -17,6 +17,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
+import uuid
+
 import celery.bootsteps
 import subprocess
 import os
@@ -110,21 +112,6 @@ def get(dist, force_retry=False):
                             continue
                     if stored_package.status == "retry":
                         log.debug(f"{package}: already submitted. Skipping.")
-                        continue
-
-                # check if metadata exists: this should be superseded by _metadata_to_db
-                if not stored_package:
-                    metadata = os.path.join(get_intoto_metadata_package(package), 'metadata')
-                    metadata_unrepr = os.path.join(
-                        get_intoto_metadata_package(package, unreproducible=True), 'metadata')
-                    if os.path.exists(metadata):
-                        package.status = "reproducible"
-                    elif os.path.exists(metadata_unrepr):
-                        package.status = "unreproducible"
-                    if package.status in ("reproducible", "unreproducible"):
-                        log.debug(f"{package}: already built ({package.status}). Skipping")
-                        package.log = get_latest_log_file(package)
-                        result.setdefault("rebuild", []).append(dict(package))
                         continue
 
                 if dict(package) not in rebuild_queued_tasks:
@@ -319,6 +306,7 @@ def upload(package=None, project=None, upload_results=False):
 def _generate_results(project):
     # generate plots from results
     try:
+        log.debug(f"Generating results for project {project}")
         generate_results(app, project)
     except RebuilderException as e:
         log.error(f"Failed to generate plots: {str(e)}")
@@ -327,10 +315,15 @@ def _generate_results(project):
 
 @app.task(base=BaseTask)
 def _metadata_to_db(dist, unreproducible=False):
-    result = {"rebuild": []}
     try:
         dist = RebuilderDist(dist)
-        result["rebuild"] = metadata_to_db(app, dist, unreproducible=unreproducible)
+        log.debug(f"Provisionning DB for {dist} "
+                  f"({'reproducible' if not unreproducible else 'unreproducible'} data)")
+        for p in metadata_to_db(app, dist, unreproducible=unreproducible):
+            app.backend._store_result(
+                task_id=uuid.uuid4(),
+                result={"rebuild": [p]},
+                state="SUCCESS"
+            )
     except Exception as e:
         log.error(f"Failed to generate DB results: {str(e)}")
-    return result

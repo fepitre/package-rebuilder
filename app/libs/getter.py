@@ -57,9 +57,7 @@ def get_rebuild_packages(app, finished=False, with_id=False):
                 parsed_packages.append(package)
     # create dict to help into getting package info faster
     for p in sorted(parsed_packages, key=lambda x: str(x)):
-        rebuilt_packages.setdefault(str(p), [])
-        if p not in rebuilt_packages[str(p)]:
-            rebuilt_packages[str(p)].append(p)
+        rebuilt_packages[str(p)] = p
     return rebuilt_packages
 
 

@@ -94,29 +94,16 @@ def func(pct, allvals):
     return res
 
 
-def generate_results(app, distribution):
+def generate_results(app, project):
     rebuild_results = get_rebuild_packages(app)
     running_rebuilds = [getPackage(p)
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]
     try:
-        for dist in Config["project"][distribution]["dist"]:
+        for dist in Config["project"][project]["dist"]:
             dist = RebuilderDist(dist)
             results_path = f"/rebuild/{dist.project}/results"
             os.makedirs(results_path, exist_ok=True)
-
-            # Get results for given dist
-            results = [x for x in rebuild_results.values()
-                       if x['distribution'] == dist.distribution and x['arch'] == dist.arch]
-
-            # Filter latest results
-            latest_results = {}
-            for r in results:
-                if latest_results.get(r["name"], None):
-                    if parse_version(r["version"]) \
-                            <= parse_version(latest_results[r["name"]]["version"]):
-                        continue
-                latest_results[r["name"]] = r
 
             # Get BuildPackages that go into rebuild
             dist.repo.get_packages()
@@ -141,8 +128,8 @@ def generate_results(app, distribution):
                     if package in running_rebuilds:
                         package["badge"] = BADGES["running"]
                         result["running"].append(package)
-                    elif latest_results.get(package.name, {}):
-                        pkg = getPackage(latest_results[package.name])
+                    elif rebuild_results.get(str(package), {}):
+                        pkg = rebuild_results[str(package)]
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             if pkg.log and os.path.basename(pkg.log):
                                 pkg.log = f'../logs/{os.path.basename(pkg.log)}'
