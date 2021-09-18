@@ -165,7 +165,10 @@ backend = mongodb://backend:27017
 
 [debian]
 # Scheduled task period for fetching latest packages to rebuild
-schedule = 1800
+schedule_get = 1800
+
+# Scheduled task period for generating results
+schedule_generate_results = 300
 
 # GPG key fingerprint
 # local keyring: /var/lib/rebuilder/gnupg
@@ -207,9 +210,11 @@ backend = mongodb://backend:27017
 # Each option in 'common' section can be set per project distribution section
 #
 [common]
-
 # Scheduled task period for fetching latest packages to rebuild
-schedule = 1800
+schedule_get = 1800
+
+# Scheduled task period for generating results
+schedule_generate_results = 300
 
 # GPG key fingerprint
 # local keyring: /var/lib/rebuilder/gnupg

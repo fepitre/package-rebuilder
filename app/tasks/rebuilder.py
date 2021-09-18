@@ -69,12 +69,13 @@ class RebuildTask(BaseTask):
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
     for project in Config["project"].keys():
-        schedule = Config["project"][project]["schedule"]
+        schedule_get = Config["project"][project]["schedule_get"]
         for dist in Config["project"][project]["dist"]:
-            sender.add_periodic_task(schedule, get.s(dist), name=dist)
+            sender.add_periodic_task(schedule_get, get.s(dist), name=dist)
 
         # fixme: improve how we expose results
-        sender.add_periodic_task(60, _generate_results.s(project))
+        schedule_generate_results = Config["project"][project]["schedule_generate_results"]
+        sender.add_periodic_task(schedule_generate_results, _generate_results.s(project))
 
 
 @app.task(base=BaseTask)

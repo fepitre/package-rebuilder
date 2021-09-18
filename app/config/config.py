@@ -24,7 +24,8 @@ import os
 DEFAULT_CONFIG = {
     "broker": os.environ.get('CELERY_BROKER_URL', "redis://broker:6379/0"),
     "backend": os.environ.get('CELERY_RESULT_BACKEND', "mongodb://backend:27017"),
-    "schedule": 1800,
+    "schedule_get": 1800,
+    "schedule_generate_results": 300,
     "max_retries": 2,
     "snapshot": "http://snapshot.notset.fr"
 }
@@ -33,8 +34,10 @@ DEFAULT_CONFIG = {
 SUPPORTED_PROJECTS = ["qubesos", "debian", "fedora"]
 
 # Filter allowed options in sections for projects (e.g. 'common', 'qubesos', 'debian', etc.)
-SECTION_OPTIONS = ["schedule", "snapshot", "in-toto-sign-key-fpr", "repo-ssh-key",
-                   "repo-remote-ssh-host", "repo-remote-ssh-basedir", "dist"]
+SECTION_OPTIONS = [
+    "schedule_get", "snapshot", "in-toto-sign-key-fpr", "repo-ssh-key",
+    "repo-remote-ssh-host", "repo-remote-ssh-basedir", "dist", "schedule_generate_results"
+]
 
 
 config = configparser.RawConfigParser(allow_no_value=False)
@@ -52,7 +55,8 @@ Config = {
         "max_retries": config.get("common", "max_retries", fallback=DEFAULT_CONFIG["max_retries"]),
     },
     "common": {
-        "schedule": config.get("common", "schedule", fallback=DEFAULT_CONFIG["schedule"]),
+        "schedule_get": config.get("common", "schedule_get", fallback=DEFAULT_CONFIG["schedule_get"]),
+        "schedule_generate_results": config.get("common", "schedule_generate_results", fallback=DEFAULT_CONFIG["schedule_generate_results"]),
         "snapshot": config.get("common", "snapshot", fallback=DEFAULT_CONFIG["snapshot"]),
     },
     "project": {}
@@ -65,7 +69,7 @@ if "common" in config.sections():
             if option == "dist":
                 # fixme: allow dist in common like it was mostly before this refactor?
                 continue
-            if option == "schedule":
+            if option in ("schedule_get", "schedule_generate_results"):
                 config_option = int(config_option)
             Config["common"][option] = config_option
 
@@ -80,6 +84,6 @@ for project in SUPPORTED_PROJECTS:
             Config["project"][project].setdefault(option, {})
             if option == "dist":
                 config_option = config_option.replace(' ', '\n').splitlines()
-            if option == "schedule":
+            if option in ("schedule_get", "schedule_generate_results"):
                 config_option = int(config_option)
             Config["project"][project][option] = config_option
