@@ -41,19 +41,25 @@ from app.libs.rebuilder import get_latest_log_file
 from app.libs.attester import get_intoto_metadata_basedir
 
 
-def get_rebuild_packages(app):
+def get_rebuild_packages(app, finished=False, with_id=False):
     rebuilt_packages = {}
     parsed_packages = []
-    tasks = get_backend_tasks(app)
+    tasks = get_backend_tasks(app, with_id=with_id)
     for task in tasks:
         parsed_task = rebuild_task_parser(task)
         if parsed_task:
             for p in parsed_task:
                 package = getPackage(p)
+                if with_id:
+                    package["_id"] = task["_id"]
+                if finished and package.status not in ("reproducible", "unreproducible", "failure"):
+                    continue
                 parsed_packages.append(package)
     # create dict to help into getting package info faster
     for p in sorted(parsed_packages, key=lambda x: str(x)):
-        rebuilt_packages[str(p)] = p
+        rebuilt_packages.setdefault(str(p), [])
+        if p not in rebuilt_packages[str(p)]:
+            rebuilt_packages[str(p)].append(p)
     return rebuilt_packages
 
 
@@ -167,9 +173,17 @@ class Package(dict):
         self[key] = value
 
     def __repr__(self):
-        result = f'{self.name}-{self.version}.{self.arch}'
+        result = f"{self.name}-{self.version}.{self.arch}"
         if self.epoch and self.epoch != 0:
-            result = f'{self.epoch}:{result}'
+            result = f"{self.epoch}:{result}"
+        if self.status:
+            result = f"{result}={self.status}"
+        return result
+
+    def __str__(self):
+        result = f"{self.name}-{self.version}.{self.arch}"
+        if self.epoch and self.epoch != 0:
+            result = f"{self.epoch}:{result}"
         return result
 
     def __eq__(self, other):
