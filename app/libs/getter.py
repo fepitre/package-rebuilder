@@ -41,7 +41,7 @@ from app.libs.rebuilder import get_latest_log_file
 from app.libs.attester import get_intoto_metadata_basedir
 
 
-def get_rebuild_packages(app, finished=False, with_id=False):
+def get_rebuild_packages(app, status=None, finished=False, with_id=False):
     rebuilt_packages = {}
     parsed_packages = []
     tasks = get_backend_tasks(app, with_id=with_id)
@@ -53,6 +53,8 @@ def get_rebuild_packages(app, finished=False, with_id=False):
                 if with_id:
                     package["_id"] = task["_id"]
                 if finished and package.status not in ("reproducible", "unreproducible", "failure"):
+                    continue
+                if status and package.status != status:
                     continue
                 parsed_packages.append(package)
     # create dict to help into getting package info faster
