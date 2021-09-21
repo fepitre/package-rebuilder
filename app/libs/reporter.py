@@ -51,15 +51,14 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
     {%- for package_set, status in results.items() -%}
         <h3 id="{{package_set}}">{{package_set}}</h3>
         <tbody>
-            {%- for s, packages in status.items() %}
             <table>
-                <!--<h6 id="{{s}}">{{s}}</h6>-->
-                </br>
+            {%- for s, packages in status.items() %}
                 {%- for pkg in packages %}
                     <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log']}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
                 {%- endfor %}
-            </table>
+                {{ '<tr><td></td><td></td></tr>' if not loop.last }}
             {%- endfor %}
+            </table>
         </tbody>
     {%- endfor %}
 </body>
