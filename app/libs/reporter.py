@@ -34,28 +34,34 @@ from app.libs.getter import RebuilderDist, get_rebuild_packages, getPackage
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
 <head>
-  <title>{{dist}} rebuild status</title>
-  <style>
-  body { font-family: sans-serif; }
-  td, th { border: solid 2px darkgrey; padding: 2px; }
-  table { border-collapse: collapse; width: 50%;}
-  </style>
+    <title>{{dist}} rebuild status</title>
+    <style>
+        body { font-family: sans-serif; }
+        td { border: solid 2px darkgrey; padding: 2px; width: 80%}
+        th { border: solid 2px darkgrey; padding: 2px; }
+        td+td { width: auto; }
+        table { border-collapse: collapse; width: 40%; table-layout: fixed; }
+    </style>
 </head>
 <body>
-<h1 id="dist">{{dist}}</h1>
-<table>
-{%- for package_set in packages.keys() -%}<img src="{{plots[package_set]}}"/></a>{{ '<br>' if loop.index % 2 == 0 }}{%- endfor %}
-</table>
-{%- for package_set, pkg_list in packages.items() -%}
-<h3 id="{{package_set}}">{{package_set}}</h3>
-<tbody>
-<table>
-{%- for pkg in pkg_list %}
-<tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log']}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
-{%- endfor %}
-</table>
-</tbody>
-{%- endfor %}
+    <h1 id="dist">{{dist}}</h1>
+    <table>
+        {%- for package_set in results.keys() -%}<img src="{{plots[package_set]}}"/></a>{{ '<br>' if loop.index % 2 == 0 }}{%- endfor %}
+    </table>
+    {%- for package_set, status in results.items() -%}
+        <h3 id="{{package_set}}">{{package_set}}</h3>
+        <tbody>
+            {%- for s, packages in status.items() %}
+            <table>
+                <!--<h6 id="{{s}}">{{s}}</h6>-->
+                </br>
+                {%- for pkg in packages %}
+                    <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log']}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
+                {%- endfor %}
+            </table>
+            {%- endfor %}
+        </tbody>
+    {%- endfor %}
 </body>
 </html>
 """)
@@ -110,6 +116,7 @@ def generate_results(app, project):
 
             packages_list = {}
             plots = {}
+            results = {}
             # Filter results per status on every package sets
             for pkgset_name in dist.package_sets:
                 packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
@@ -149,7 +156,8 @@ def generate_results(app, project):
                 explode = []
                 colors = []
                 for status in ["reproducible", "unreproducible", "failure", "retry", "running", "pending"]:
-                    if not result[status]:
+                    if not result.get(status, None):
+                        result.pop(status, None)
                         continue
                     count = len(result[status])
                     x.append(count)
@@ -175,13 +183,14 @@ def generate_results(app, project):
                 plt.close(fig)
 
                 plots[pkgset_name] = f"{dist.distribution}_{pkgset_name}.{dist.arch}.png"
+                results[pkgset_name] = result
 
-                with open(f"{results_path}/{dist}.json", "w") as fd:
-                    fd.write(json.dumps(result, indent=2) + "\n")
+            with open(f"{results_path}/{dist}.json", "w") as fd:
+                fd.write(json.dumps(results, indent=2) + "\n")
 
             data = {
                 "dist": f"{dist.project} {dist.distribution} ({dist.arch})",
-                "packages": packages_list,
+                "results": results,
                 "plots": plots
             }
             with open(f"{results_path}/{dist.distribution}.{dist.arch}.html", 'w') as fd:
