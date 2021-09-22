@@ -105,17 +105,18 @@ def generate_results(app, project):
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]
     try:
+        results = {}
+        results_path = f"/rebuild/{project}/results"
+        os.makedirs(results_path, exist_ok=True)
         for dist in Config["project"][project]["dist"]:
             dist = RebuilderDist(dist)
-            results_path = f"/rebuild/{dist.project}/results"
-            os.makedirs(results_path, exist_ok=True)
+            results.setdefault(dist.distribution, {})
+            results[dist.distribution].setdefault(dist.arch, {})
 
             # Get BuildPackages that go into rebuild
             dist.repo.get_packages()
 
-            packages_list = {}
             plots = {}
-            results = {}
             # Filter results per status on every package sets
             for pkgset_name in dist.package_sets:
                 packages_to_rebuild = dist.repo.get_packages_to_rebuild(pkgset_name)
@@ -129,7 +130,6 @@ def generate_results(app, project):
                     "pending": [],
                     "retry": []
                 }
-                packages_list[pkgset_name] = []
                 for package in packages_to_rebuild:
                     if package in running_rebuilds:
                         package["badge"] = BADGES["running"]
@@ -146,15 +146,12 @@ def generate_results(app, project):
                         pkg["badge"] = BADGES["pending"]
                         result["pending"].append(dict(pkg))
 
-                # We simplify how we render HTML
-                for packages in result.values():
-                    packages_list[pkgset_name] += packages
-
                 x = []
                 legends = []
                 explode = []
                 colors = []
-                for status in ["reproducible", "unreproducible", "failure", "retry", "running", "pending"]:
+                for status in ["reproducible", "unreproducible", "failure", "retry",
+                               "running", "pending"]:
                     if not result.get(status, None):
                         result.pop(status, None)
                         continue
@@ -182,18 +179,18 @@ def generate_results(app, project):
                 plt.close(fig)
 
                 plots[pkgset_name] = f"{dist.distribution}_{pkgset_name}.{dist.arch}.png"
-                results[pkgset_name] = result
-
-            with open(f"{results_path}/{dist}.json", "w") as fd:
-                fd.write(json.dumps(results, indent=2) + "\n")
+                results[dist.distribution][dist.arch][pkgset_name] = result
 
             data = {
                 "dist": f"{dist.project} {dist.distribution} ({dist.arch})",
-                "results": results,
+                "results": results[dist.distribution][dist.arch],
                 "plots": plots
             }
             with open(f"{results_path}/{dist.distribution}.{dist.arch}.html", 'w') as fd:
                 fd.write(HTML_TEMPLATE.render(**data))
+
+        with open(f"{results_path}/{project}.json", "w") as fd:
+            fd.write(json.dumps(results))
 
     except Exception as e:
         raise RebuilderException(f"Failed to generate status: {str(e)}")
