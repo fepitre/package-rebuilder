@@ -99,6 +99,40 @@ def func(pct, allvals):
     return res
 
 
+def generate_plots(result, distribution, pkgset_name, arch, results_path):
+    x = []
+    legends = []
+    explode = []
+    colors = []
+    for status in ["reproducible", "unreproducible", "failure", "retry",
+                   "running", "pending"]:
+        if not result.get(status, None):
+            result.pop(status, None)
+            continue
+        count = len(result[status])
+        x.append(count)
+        legends.append(status)
+        colors.append(COLORS[status])
+        explode.append(EXPLODE[status])
+
+    fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
+    wedges, texts, autotexts = ax.pie(
+        x, colors=colors, explode=explode,
+        labels=x,
+        autopct="%.1f%%",
+        shadow=False, startangle=270,
+        normalize=True,
+        labeldistance=1.1)
+    ax.legend(wedges, legends, title="Status", loc="center left",
+              bbox_to_anchor=(1, 0, 0.5, 1))
+    ax.set(aspect="equal", title=f"{distribution}+{pkgset_name}.{arch}")
+    for idx, text in enumerate(texts):
+        text.set_color(colors[idx])
+    fig.savefig(f"{results_path}/{distribution}_{pkgset_name}.{arch}.png",
+                bbox_inches='tight')
+    plt.close(fig)
+
+
 def generate_results(app, project):
     rebuild_results = get_rebuild_packages(app)
     running_rebuilds = [getPackage(p)
@@ -146,47 +180,41 @@ def generate_results(app, project):
                         pkg["badge"] = BADGES["pending"]
                         result["pending"].append(dict(pkg))
 
-                x = []
-                legends = []
-                explode = []
-                colors = []
-                for status in ["reproducible", "unreproducible", "failure", "retry",
-                               "running", "pending"]:
-                    if not result.get(status, None):
-                        result.pop(status, None)
-                        continue
-                    count = len(result[status])
-                    x.append(count)
-                    legends.append(status)
-                    colors.append(COLORS[status])
-                    explode.append(EXPLODE[status])
-
-                fig, ax = plt.subplots(figsize=(9, 6), subplot_kw=dict(aspect="equal"))
-                wedges, texts, autotexts = ax.pie(
-                    x, colors=colors, explode=explode,
-                    labels=x,
-                    autopct="%.1f%%",
-                    shadow=False, startangle=270,
-                    normalize=True,
-                    labeldistance=1.1)
-                ax.legend(wedges, legends, title="Status", loc="center left",
-                          bbox_to_anchor=(1, 0, 0.5, 1))
-                ax.set(aspect="equal", title=f"{dist.distribution}+{pkgset_name}.{dist.arch}")
-                for idx, text in enumerate(texts):
-                    text.set_color(colors[idx])
-                fig.savefig(f"{results_path}/{dist.distribution}_{pkgset_name}.{dist.arch}.png",
-                            bbox_inches='tight')
-                plt.close(fig)
+                generate_plots(result, dist.distribution, pkgset_name, dist.arch, results_path)
 
                 plots[pkgset_name] = f"{dist.distribution}_{pkgset_name}.{dist.arch}.png"
                 results[dist.distribution][dist.arch][pkgset_name] = result
 
             data = {
-                "dist": f"{dist.project} {dist.distribution} ({dist.arch})",
+                "dist": f"{project} {dist.distribution} ({dist.arch})",
                 "results": results[dist.distribution][dist.arch],
                 "plots": plots
             }
             with open(f"{results_path}/{dist.distribution}.{dist.arch}.html", 'w') as fd:
+                fd.write(HTML_TEMPLATE.render(**data))
+
+        # all arches
+        for dist in results.keys():
+            sum_arches = "+".join(results[dist].keys())
+            all_arches = {}
+            plots = {}
+            for arch in results[dist].keys():
+                for ps in results[dist][arch].keys():
+                    all_arches.setdefault(ps, {})
+                    for s in results[dist][arch][ps].keys():
+                        all_arches[ps].setdefault(s, [])
+                        all_arches[ps][s] += results[dist][arch][ps][s]
+            results[dist][sum_arches] = all_arches
+
+            for ps in results[dist][sum_arches].keys():
+                generate_plots(results[dist][sum_arches][ps], dist, ps, sum_arches, results_path)
+                plots[ps] = f"{dist}_{ps}.{sum_arches}.png"
+            data = {
+                "dist": f"{project} {dist} ({sum_arches})",
+                "results": results[dist][sum_arches],
+                "plots": plots
+            }
+            with open(f"{results_path}/{dist}.{sum_arches}.html", 'w') as fd:
                 fd.write(HTML_TEMPLATE.render(**data))
 
         with open(f"{results_path}/{project}.json", "w") as fd:
