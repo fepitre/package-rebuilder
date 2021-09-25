@@ -128,8 +128,7 @@ def generate_plots(result, distribution, pkgset_name, arch, results_path):
     ax.set(aspect="equal", title=f"{distribution}+{pkgset_name}.{arch}")
     for idx, text in enumerate(texts):
         text.set_color(colors[idx])
-    fig.savefig(f"{results_path}/{distribution}_{pkgset_name}.{arch}.png",
-                bbox_inches='tight')
+    fig.savefig(f"{results_path}/{distribution}_{pkgset_name}.{arch}.png")
     plt.close(fig)
 
 
