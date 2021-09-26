@@ -133,7 +133,7 @@ def get(dist, force_retry=False):
 def rebuild(package):
     try:
         package = getPackage(package)
-    except KeyError as e:
+    except Exception as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
     builder = getRebuilder(package.distribution)
@@ -146,7 +146,7 @@ def rebuild(package):
 def attest(package):
     try:
         package = getPackage(package)
-    except KeyError as e:
+    except Exception as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
 
@@ -217,7 +217,7 @@ def attest(package):
 def report(package):
     try:
         package = getPackage(package)
-    except KeyError as e:
+    except Exception as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionReport from e
 
@@ -253,7 +253,7 @@ def report(package):
 def upload(package=None, project=None, upload_results=False):
     try:
         package = getPackage(package) if package else None
-    except KeyError as e:
+    except Exception as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionUpload from e
 
