@@ -29,6 +29,7 @@ except ImportError:
     koji = None
 try:
     import debian.debian_support
+    import debian.deb822
 except ImportError:
     debian = None
 
@@ -405,16 +406,29 @@ class QubesRepository:
                 if parsed_bn['arch'] not in ("noarch", self.arch):
                     continue
             elif is_debian(self.distribution):
+                resp = requests.get(f)
+                if not resp.ok:
+                    continue
                 parsed_bn = parse_deb_buildinfo_fname(f)
                 if not parsed_bn:
                     continue
-                if len(parsed_bn['arch']) > 1:
+                # fixme: QubesOS does not distinguish "all" and "amd64" in buildinfo names
+                parsed_buildinfo = debian.deb822.BuildInfo(resp.content)
+                architecture = [arch for arch in parsed_buildinfo["Architecture"].split()
+                                if arch not in ("source", "all")]
+                if architecture:
+                    # fixme: cannot predict which binary arch will be built
+                    build_arch = "amd64"
+                elif "all" in parsed_buildinfo["Architecture"].split():
+                    build_arch = "all"
+                else:
                     continue
+                # self.arch is the request arch to rebuild
                 self.arch = DEBIAN_ARCHES.get(self.arch, self.arch)
-                if parsed_bn['arch'][0] != self.arch:
+                if self.arch != build_arch:
                     continue
                 if '+deb{}u'.format(DEBIAN.get(self.distribution)) not in \
-                        parsed_bn['version']:
+                        parsed_buildinfo['version']:
                     continue
             else:
                 continue
