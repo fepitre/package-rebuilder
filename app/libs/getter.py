@@ -44,7 +44,7 @@ from app.libs.attester import get_intoto_metadata_basedir
 def get_rebuild_packages(app, status=None, finished=False, with_id=False):
     rebuilt_packages = {}
     parsed_packages = []
-    tasks = get_backend_tasks(app, with_id=with_id)
+    tasks = get_backend_tasks(app)
     for task in tasks:
         parsed_task = rebuild_task_parser(task)
         if parsed_task:

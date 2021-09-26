@@ -152,19 +152,15 @@ def get_celery_unacked_tasks(app):
     return submitted_tasks
 
 
-def get_backend_tasks(app, with_id=False):
+def get_backend_tasks(app):
     backend = app.backend
     col = backend.collection.find()
     results = []
     for _, doc in enumerate(col):
-        r = {}
-        for f in ['status', 'result']:
-            value = doc[f]
-            if f == 'result' and isinstance(doc[f], str):
-                value = json.loads(doc[f])
-            r[f] = value
-        if with_id:
-            r["_id"] = doc["_id"]
+        r = doc
+        if not isinstance(doc["result"], str):
+            continue
+        r["result"] = json.loads(doc["result"])
         results.append(r)
     return results
 
