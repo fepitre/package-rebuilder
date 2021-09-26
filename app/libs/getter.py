@@ -81,7 +81,8 @@ def metadata_to_db(app, dist, unreproducible=False):
             for version in os.listdir(f"{metadata_basedir}/{name}"):
                 buildinfo = glob.glob(f"{metadata_basedir}/{name}/{version}/*.buildinfo")
                 buildinfo = buildinfo[0] if buildinfo else None
-                if buildinfo:
+                metadata = f"{metadata_basedir}/{name}/{version}/metadata"
+                if buildinfo and os.path.exists(metadata):
                     parsed_bn = parse_deb_buildinfo_fname(buildinfo)
                     if not parsed_bn:
                         continue
@@ -96,7 +97,8 @@ def metadata_to_db(app, dist, unreproducible=False):
                         "epoch": parsed_bn['epoch'],
                         "status": "reproducible" if not unreproducible else "unreproducible",
                         "url": buildinfo,
-                        "distribution": distribution
+                        "distribution": distribution,
+                        "metadata": metadata
                     })
                     package.log = get_latest_log_file(package)
                     if not stored_packages.get(str(package), None):
@@ -161,10 +163,10 @@ def getPackage(package_as_dict):
 
 class Package(dict):
     def __init__(self, name, epoch, version, arch, distribution, url,
-                 artifacts="", status="", log="", retries=0):
+                 metadata="", artifacts="", status="", log="", retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
-                      distribution=distribution, url=url, artifacts=artifacts, status=status,
-                      log=log, retries=retries)
+                      distribution=distribution, url=url, metadata=metadata, artifacts=artifacts,
+                      status=status, log=log, retries=retries)
 
     def __getattr__(self, item):
         return self[item]
@@ -192,6 +194,12 @@ class Package(dict):
     @classmethod
     def from_dict(cls, pkg):
         return cls(**pkg)
+
+    def to_dict(self):
+        d = dict(self)
+        for k in ["artifacts", "retries"]:
+            del d[k]
+        return d
 
 
 class DebianPackage(Package):

@@ -34,7 +34,7 @@ from app.libs.exceptions import RebuilderException, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
 from app.libs.common import get_celery_queued_tasks, get_project
 from app.libs.getter import getPackage, RebuilderDist, get_rebuild_packages, metadata_to_db
-from app.libs.rebuilder import getRebuilder, get_latest_log_file
+from app.libs.rebuilder import getRebuilder
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package
 from app.libs.reporter import generate_results
 
@@ -222,14 +222,17 @@ def report(package):
     output_dir = f"/rebuild/{builder.project}"
     log_dir = f"{output_dir}/logs"
     os.makedirs(log_dir, exist_ok=True)
-    src_log = f"/artifacts/{builder.distdir}/{package.log}"
-    dst_log = f"{log_dir}/{package.log}"
+    src_log = f"{package.log}"
+    dst_log = f"{log_dir}/{os.path.basename(package.log)}"
     if not os.path.exists(src_log):
         raise RebuilderExceptionReport(f"Cannot find build log file {src_log}")
     if not os.path.exists(dst_log):
         shutil.move(src_log, dst_log)
     if not os.path.exists(dst_log):
         raise RebuilderExceptionReport(f"Cannot find build log file {dst_log}")
+
+    # store new log location
+    package.log = dst_log
 
     # remove artifacts
     if os.path.exists(package.artifacts):
@@ -327,7 +330,7 @@ def _metadata_to_db(dist, unreproducible=False):
         for p in metadata_to_db(app, dist, unreproducible=unreproducible):
             app.backend._store_result(
                 task_id=uuid.uuid4(),
-                result={"rebuild": [p]},
+                result={"report": [p]},
                 state="SUCCESS"
             )
     except Exception as e:

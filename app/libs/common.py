@@ -113,9 +113,9 @@ def get_celery_active_tasks(app, name=None):
 
 def rebuild_task_parser(task):
     parsed_task = None
-    if task["status"] == 'SUCCESS' and isinstance(task["result"], dict)\
-            and task["result"].get("rebuild", None):
-        parsed_task = task["result"]["rebuild"]
+    if task["status"] == 'SUCCESS' and isinstance(task["result"], dict) \
+            and task["result"].get("report", None):
+        parsed_task = task["result"]["report"]
     elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
             and task["result"]["exc_type"] == "RebuilderExceptionBuild":
         # We have stored package info in exception

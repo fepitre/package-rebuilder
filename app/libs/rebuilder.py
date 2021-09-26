@@ -67,7 +67,7 @@ def get_latest_log_file(package):
     builder = getRebuilder(package.distribution)
     output_dir = f"/rebuild/{builder.project}"
     pkg_log_files = glob.glob(f"{output_dir}/logs/{package}-*.log")
-    pkg_log_files = sorted([os.path.basename(f) for f in pkg_log_files], reverse=True)
+    pkg_log_files = sorted([f for f in pkg_log_files], reverse=True)
     return pkg_log_files[0] if pkg_log_files else ""
 
 
@@ -147,7 +147,7 @@ class DebianRebuilder(BaseRebuilder):
             package.artifacts = artifactsdir
 
             # This is for recording logfile entry into DB
-            package.log = os.path.basename(logfile)
+            package.log = logfile
 
             if result.returncode == 0:
                 package.status = "reproducible"

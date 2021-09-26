@@ -23,7 +23,6 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from packaging.version import parse as parse_version
 from jinja2 import Template
 
 from app.libs.common import get_celery_active_tasks
@@ -54,7 +53,7 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
             <table>
             {%- for s, packages in status.items() %}
                 {%- for pkg in packages %}
-                    <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log']}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
+                    <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log'].replace('/rebuild', '')}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
                 {%- endfor %}
                 {{ '<tr><td></td><td></td></tr>' if not loop.last }}
             {%- endfor %}
@@ -166,18 +165,16 @@ def generate_results(app, project):
                 for package in packages_to_rebuild:
                     if package in running_rebuilds:
                         package["badge"] = BADGES["running"]
-                        result["running"].append(package)
+                        result["running"].append(package.to_dict())
                     elif rebuild_results.get(str(package), {}):
                         pkg = rebuild_results[str(package)]
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
-                            if pkg.log and os.path.basename(pkg.log):
-                                pkg.log = f'../logs/{os.path.basename(pkg.log)}'
                             pkg["badge"] = BADGES[pkg.status]
-                            result[pkg.status].append(dict(pkg))
+                            result[pkg.status].append(pkg.to_dict())
                     else:
                         pkg = package
                         pkg["badge"] = BADGES["pending"]
-                        result["pending"].append(dict(pkg))
+                        result["pending"].append(pkg.to_dict())
 
                 generate_plots(result, dist.distribution, pkgset_name, dist.arch, results_path)
 
