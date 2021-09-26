@@ -147,6 +147,8 @@ class RebuilderDist:
 
 
 def getPackage(package_as_dict):
+    if not isinstance(package_as_dict, dict):
+        raise RebuilderExceptionGet("Cannot parse input")
     distribution = package_as_dict.get("distribution", None)
     if not distribution:
         raise RebuilderExceptionGet(f"Cannot find distribution for: {package_as_dict}")
