@@ -196,6 +196,10 @@ def attest(package):
         if not os.path.exists("metadata"):
             os.symlink(link, "metadata")
 
+        # update buildinfo and metadata
+        package.url = f"{outputdir}/buildinfo"
+        package.metadata = f"{outputdir}/metadata"
+
         os.chdir(os.path.join(outputdir, "../../"))
         for binpkg in parsed_buildinfo.get_binary():
             if not os.path.exists(binpkg):
