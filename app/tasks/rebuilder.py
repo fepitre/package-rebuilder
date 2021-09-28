@@ -227,7 +227,8 @@ def report(package):
     log_dir = f"{output_dir}/logs"
     os.makedirs(log_dir, exist_ok=True)
     src_log = f"{package.log}"
-    dst_log = f"{log_dir}/{os.path.basename(package.log)}"
+    log_file = os.path.basename(package.log)
+    dst_log = f"{log_dir}/{log_file}"
     if not os.path.exists(src_log):
         raise RebuilderExceptionReport(f"Cannot find build log file {src_log}")
     if not os.path.exists(dst_log):
@@ -237,6 +238,17 @@ def report(package):
 
     # store new log location
     package.log = dst_log
+
+    # collect diffoscope if exists
+    diffoscope_src_log = f"{package.artifacts}/diffoscope.out"
+    if package.status == "unreproducible" and os.path.exists(diffoscope_src_log):
+        diffoscope_dst_log = f"{log_dir}/{os.path.splitext(log_file)[0]}.diffoscope.log"
+        if not os.path.exists(diffoscope_dst_log):
+            shutil.move(diffoscope_src_log, diffoscope_dst_log)
+        if not os.path.exists(diffoscope_dst_log):
+            raise RebuilderExceptionReport(
+                f"Cannot find build diffoscope log file {diffoscope_dst_log}")
+        package.diffoscope = diffoscope_dst_log
 
     # remove artifacts
     if os.path.exists(package.artifacts):

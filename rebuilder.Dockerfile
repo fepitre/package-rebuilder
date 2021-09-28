@@ -3,7 +3,8 @@ MAINTAINER Frédéric Pierret <frederic.pierret@qubes-os.org>
 
 # REBUILDER
 RUN apt-get update && apt-get install -y mmdebstrap in-toto python3-dateutil python3-rstr python3-setuptools \
-    debian-keyring debian-archive-keyring debian-ports-archive-keyring && apt-get clean all
+    python3-httpx python3-tenacity diffoscope debian-keyring debian-archive-keyring debian-ports-archive-keyring \
+    && apt-get clean all
 # Use upstream python-debian code
 # This is needed for libs/rebuilder.py when looping over binpkg in get_binary()
 RUN git clone https://salsa.debian.org/python-debian-team/python-debian /opt/python-debian

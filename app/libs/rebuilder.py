@@ -71,6 +71,16 @@ def get_latest_log_file(package):
     return pkg_log_files[0] if pkg_log_files else ""
 
 
+def get_latest_diffoscope_file(package):
+    diffoscope_log = ""
+    if not package.log:
+        return diffoscope_log
+    log = f"{os.path.dirname(package.log)}/{os.path.splitext(package.log)[0]}.diffoscope.log"
+    if os.path.exists(log):
+        diffoscope_log = log
+    return diffoscope_log
+
+
 class BaseRebuilder:
     def __init__(self, **kwargs):
         self.sign_keyid = kwargs.get('sign_keyid', None)

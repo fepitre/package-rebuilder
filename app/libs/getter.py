@@ -167,10 +167,11 @@ def getPackage(package_as_dict):
 
 class Package(dict):
     def __init__(self, name, epoch, version, arch, distribution, url,
-                 metadata="", artifacts="", status="", log="", retries=0):
+                 metadata="", artifacts="", status="", log="", diffoscope="",
+                 retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
                       distribution=distribution, url=url, metadata=metadata, artifacts=artifacts,
-                      status=status, log=log, retries=retries)
+                      status=status, log=log, diffoscope=diffoscope, retries=retries)
 
     def __getattr__(self, item):
         return self[item]
