@@ -94,6 +94,8 @@ def parse_deb_buildinfo_fname(buildinfo):
     return parsed_bn
 
 
+# TODO: convert and refactor below functions into client to be used notably for creating a BASH cli
+
 def get_celery_active_tasks(app, name=None):
     inspect = app.control.inspect()
     tasks = []
@@ -165,12 +167,18 @@ def get_backend_tasks(app):
     return results
 
 
-def delete_backend_tasks(app, status):
+def delete_backend_tasks_by_celery_status(app, status):
     backend = app.backend
     col = backend.collection.find()
-    results = []
     for _, doc in enumerate(col):
         if doc["status"] == status:
-            backend.collection.delete_one({"_id": doc["_id"]})
-            results.append(doc)
-    return results
+            backend._forget(doc["_id"])
+
+
+def delete_backend_tasks_by_backend_id(app, ids):
+    backend = app.backend
+    for id in ids:
+        try:
+            backend._forget(id)
+        except Exception:
+            continue
