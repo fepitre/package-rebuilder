@@ -115,6 +115,9 @@ def get_celery_active_tasks(app, name=None):
 
 def rebuild_task_parser(task):
     parsed_task = None
+    task_status = task["status"].lower()
+    # Get successful build from 'report' queue as a build is considered finished
+    # when all the post process like collecting logs is done
     if task["status"] == 'SUCCESS' and isinstance(task["result"], dict) \
             and task["result"].get("report", None):
         parsed_task = task["result"]["report"]
@@ -122,8 +125,8 @@ def rebuild_task_parser(task):
             and task["result"]["exc_type"] == "RebuilderExceptionBuild":
         # We have stored package info in exception
         parsed_task = task["result"]["exc_message"][0]
-        parsed_task[0]["status"] = task["status"].lower()
-    return parsed_task
+        parsed_task[0]["status"] = task_status
+    return task_status, parsed_task
 
 
 def get_celery_queued_tasks(app, queue_name):

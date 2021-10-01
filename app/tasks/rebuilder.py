@@ -57,6 +57,7 @@ class RebuildTask(BaseTask):
         package = results[0]
         # Ensure to keep a trace of retries for backend
         package["retries"] = self.request.retries
+        package["status"] = "retry"
         report.delay(package)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):

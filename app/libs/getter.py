@@ -42,24 +42,34 @@ from app.libs.rebuilder import get_latest_log_file
 from app.libs.attester import get_intoto_metadata_basedir
 
 
-def get_rebuild_packages(app, status=None, finished=False, with_id=False):
+def get_rebuild_packages(app, status=None, with_id=False):
     rebuilt_packages = {}
+    failed_packages = {}
+
     parsed_packages = []
     tasks = get_backend_tasks(app)
     for task in tasks:
-        parsed_task = rebuild_task_parser(task)
+        task_status, parsed_task = rebuild_task_parser(task)
         if parsed_task:
             for p in parsed_task:
                 package = getPackage(p)
                 if with_id:
                     package["_id"] = task["_id"]
-                if finished and package.status not in ("reproducible", "unreproducible", "failure"):
+                # When a job fail it has retry/failure status from celery point of view
+                # but 'report' queue generate a success with "failure" status. We keep them
+                # for log and celery status reference.
+                if task_status == "success" and \
+                        package.status not in ("reproducible", "unreproducible"):
+                    failed_packages[str(package)] = package
                     continue
-                if status and package.status != status:
+                if status and package.status not in status:
                     continue
                 parsed_packages.append(package)
     # create dict to help into getting package info faster
     for p in sorted(parsed_packages, key=lambda x: str(x)):
+        if failed_packages.get(str(p), None):
+            p.log = failed_packages[str(p)].log
+            p.retries = failed_packages[str(p)].retries
         rebuilt_packages[str(p)] = p
     return rebuilt_packages
 
