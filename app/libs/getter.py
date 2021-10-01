@@ -80,11 +80,8 @@ def metadata_to_db(app, dist, unreproducible=False):
     for name in os.listdir(metadata_basedir):
         if not os.path.islink(f"{metadata_basedir}/{name}"):
             for version in os.listdir(f"{metadata_basedir}/{name}"):
-                buildinfo = glob.glob(f"{metadata_basedir}/{name}/{version}/*.buildinfo")
-                buildinfo = buildinfo[0] if buildinfo else None
-                metadata_link = f"{metadata_basedir}/{name}/{version}/metadata"
-                buildinfo_link = f"{metadata_basedir}/{name}/{version}/buildinfo"
-                if buildinfo and os.path.exists(metadata_link):
+                buildinfo_files = glob.glob(f"{metadata_basedir}/{name}/{version}/*.buildinfo")
+                for buildinfo in buildinfo_files:
                     parsed_bn = parse_deb_buildinfo_fname(buildinfo)
                     if not parsed_bn:
                         continue
@@ -92,15 +89,16 @@ def metadata_to_db(app, dist, unreproducible=False):
                         continue
                     if parsed_bn['arch'][0] != arch:
                         continue
+                    metadata = glob.glob(f"{metadata_basedir}/{name}/{version}/rebuild.*.{arch}.link")
                     package = getPackage({
                         "name": parsed_bn["name"],
                         "version": parsed_bn["version"],
                         "arch": arch,
                         "epoch": parsed_bn['epoch'],
                         "status": "reproducible" if not unreproducible else "unreproducible",
-                        "url": buildinfo_link if os.path.exists(buildinfo_link) else buildinfo,
+                        "url": buildinfo,
                         "distribution": distribution,
-                        "metadata": metadata_link
+                        "metadata": metadata[0] if metadata else ""
                     })
                     package.log = get_latest_log_file(package)
                     if not stored_packages.get(str(package), None):
