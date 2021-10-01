@@ -35,7 +35,8 @@ from app.libs.exceptions import RebuilderException, \
 from app.libs.common import get_celery_queued_tasks, get_project
 from app.libs.getter import getPackage, RebuilderDist, get_rebuild_packages, metadata_to_db
 from app.libs.rebuilder import getRebuilder
-from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package
+from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package, \
+    merge_intoto_metadata
 from app.libs.reporter import generate_results
 
 
@@ -176,34 +177,39 @@ def attest(package):
         raise RebuilderExceptionAttest(f"Unknown status: {package.status}")
     if gpg_sign_keyid:
         # generate in-toto metadata
-        generate_intoto_metadata(package.artifacts, gpg_sign_keyid, parsed_buildinfo)
-        link = glob.glob("rebuild*.link")
-        if not link:
+        generate_intoto_metadata(package, gpg_sign_keyid, parsed_buildinfo)
+
+        os.chdir(package.artifacts)
+        tmp_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.link"
+        if not os.path.exists(tmp_link):
             raise RebuilderExceptionAttest(f"Cannot find link for {package}")
-        link = link[0]
+        final_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.{package.arch}.link"
 
         # create final output directory
         outputdir = get_intoto_metadata_package(
             package, unreproducible=package.status == "unreproducible")
         os.makedirs(outputdir, exist_ok=True)
-        shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
-        shutil.copy2(os.path.join(package.artifacts, link), outputdir)
 
-        # create symlink to new buildinfo and rebuild link file
-        os.chdir(outputdir)
-        if not os.path.exists("buildinfo"):
-            os.symlink(buildinfo, "buildinfo")
-        if not os.path.exists("metadata"):
-            os.symlink(link, "metadata")
+        shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
+        shutil.copy2(os.path.join(package.artifacts, tmp_link), f"{outputdir}/{final_link}")
 
         # update buildinfo and metadata
-        package.url = f"{outputdir}/buildinfo"
-        package.metadata = f"{outputdir}/metadata"
+        package.url = f"{outputdir}/{buildinfo}"
+        package.metadata = f"{outputdir}/{final_link}"
 
         os.chdir(os.path.join(outputdir, "../../"))
         for binpkg in parsed_buildinfo.get_binary():
             if not os.path.exists(binpkg):
                 os.symlink(package.name, binpkg)
+
+        # combine all available links (one link == one architecture)
+        os.chdir(outputdir)
+        merge_intoto_metadata(outputdir, gpg_sign_keyid)
+
+        # create symlink to new buildinfo and rebuild link file
+        os.chdir(outputdir)
+        if not os.path.exists("metadata"):
+            os.symlink(f"rebuild.{gpg_sign_keyid[:8].lower()}.link", "metadata")
     else:
         log.info(f"Unable to sign in-toto {package.status} metadata: "
                  f"no GPG keyid provided for project '{project}.")

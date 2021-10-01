@@ -17,8 +17,10 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-
+import os
 import subprocess
+import json
+import glob
 
 try:
     import koji
@@ -33,16 +35,39 @@ from app.libs.exceptions import RebuilderExceptionAttest
 from app.libs.rebuilder import getRebuilder
 
 
-def generate_intoto_metadata(output, gpg_sign_keyid, buildinfo):
+# fixme: improve merge as it does not support concurrent access
+def merge_intoto_metadata(output, gpg_sign_keyid):
+    links = glob.glob(f"{output}/rebuild.{gpg_sign_keyid[:8].lower()}.*.link")
+    final_link = {}
+    try:
+        for link in links:
+            with open(link, 'r') as fd:
+                parsed_link = json.loads(fd.read())
+            if not final_link:
+                final_link = parsed_link
+                del final_link["signatures"]
+            final_link["signed"]["products"].update(parsed_link["signed"]["products"])
+        with open(f"{output}/rebuild.link", "w") as fd:
+            fd.write(json.dumps(final_link))
+        cmd = ["in-toto-sign", "--gpg", gpg_sign_keyid, "-f", "rebuild.link"]
+        subprocess.run(cmd, cwd=output, check=True)
+    except Exception as e:
+        raise RebuilderExceptionAttest(f"Failed to merge links: {str(e)}")
+    finally:
+        if os.path.exists(f"{output}/rebuild.link"):
+            os.remove(f"{output}/rebuild.link")
+
+
+def generate_intoto_metadata(package, gpg_sign_keyid, buildinfo):
     new_files = [f['name'] for f in buildinfo['checksums-sha256']
                  if not f['name'].endswith('.dsc')]
     cmd = [
-              "in-toto-run", "--step-name=rebuild", "--no-command",
+              "in-toto-run", f"--step-name=rebuild", "--no-command",
               "--products"
           ] + list(new_files)
     cmd += ["--gpg", gpg_sign_keyid]
     try:
-        subprocess.run(cmd, cwd=output, check=True)
+        subprocess.run(cmd, cwd=package.artifacts, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         raise RebuilderExceptionAttest(f"in-toto metadata generation failed: {str(e)}")
 
