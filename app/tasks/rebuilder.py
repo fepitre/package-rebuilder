@@ -299,22 +299,27 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
     try:
         if ssh_key and remote_ssh_host and remote_ssh_basedir:
             # pay attention to latest "/", we use rsync!
-            dir_to_upload = [f"/rebuild/{project}/logs/", f"/rebuild/{project}/buildinfos/"]
-            if upload_all:
-                dir_to_upload += [
-                    f"/rebuild/{project}/",
-                ]
-            if package and package.status in ("reproducible", "unreproducible"):
-                if package.metadata.get("reproducible"):
-                    metadata_path = get_intoto_metadata_package(
-                        package, unreproducible=False
-                    )
-                    dir_to_upload.append(f"{metadata_path}/")
-                if package.metadata.get("unreproducible"):
-                    metadata_path_unrepr = get_intoto_metadata_package(
-                        package, unreproducible=True
-                    )
-                    dir_to_upload.append(f"{metadata_path_unrepr}/")
+            dir_to_upload = [
+                f"/rebuild/{project}/logs/",
+                f"/rebuild/{project}/buildinfos/",
+                f"/rebuild/{project}/sources/",
+                f"/rebuild/{project}/unreproducible/sources/",
+            ]
+            # if upload_all:
+            #     dir_to_upload += [
+            #         f"/rebuild/{project}/",
+            #     ]
+            # if package and package.status in ("reproducible", "unreproducible"):
+            #     if package.metadata.get("reproducible"):
+            #         metadata_path = get_intoto_metadata_package(
+            #             package, unreproducible=False
+            #         )
+            #         dir_to_upload.append(f"{metadata_path}/")
+            #     if package.metadata.get("unreproducible"):
+            #         metadata_path_unrepr = get_intoto_metadata_package(
+            #             package, unreproducible=True
+            #         )
+            #         dir_to_upload.append(f"{metadata_path_unrepr}/")
             if upload_results:
                 dir_to_upload.append(f"/rebuild/{project}/results/")
             for local_dir in dir_to_upload:
