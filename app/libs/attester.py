@@ -85,6 +85,11 @@ def get_intoto_metadata_package(package, unreproducible=False):
 
 
 def process_attestation(package, output, gpg_sign_keyid, files, unreproducible):
+    with open(package.buildinfos["new"]) as fd:
+        parsed_buildinfo = debian.deb822.BuildInfo(fd)
+    # if parsed_buildinfo.get_version()._BaseVersion__epoch:
+    #     package.epoch = parsed_buildinfo.get_version()._BaseVersion__epoch
+
     generate_intoto_metadata(package.artifacts, output, gpg_sign_keyid, files)
 
     tmp_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.link"
@@ -103,8 +108,6 @@ def process_attestation(package, output, gpg_sign_keyid, files, unreproducible):
     package.metadata[key] = f"{outputdir}/{final_link}"
 
     os.chdir(os.path.join(outputdir, "../../"))
-    with open(package.buildinfos["new"]) as fd:
-        parsed_buildinfo = debian.deb822.BuildInfo(fd)
     for binpkg in parsed_buildinfo.get_binary():
         if not os.path.exists(binpkg):
             os.symlink(package.name, binpkg)
