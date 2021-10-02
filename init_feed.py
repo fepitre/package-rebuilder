@@ -22,6 +22,8 @@ get.delay("bullseye+build-essential.amd64")
 get.delay("bullseye+build-essential.all")
 get.delay("bullseye+gnome.amd64")
 get.delay("bullseye+gnome.all")
+get.delay("bullseye+key_packages.amd64")
+get.delay("bullseye+key_packages.all")
 # get.delay("bullseye+full.all")
 # get.delay("bullseye+full.amd64")
 
