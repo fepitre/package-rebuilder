@@ -270,7 +270,7 @@ def report(package):
 
 
 @app.task(base=BaseTask)
-def upload(package=None, project=None, upload_results=False):
+def upload(package=None, project=None, upload_results=False, upload_all=False):
     try:
         package = getPackage(package) if package else None
     except Exception as e:
@@ -298,6 +298,10 @@ def upload(package=None, project=None, upload_results=False):
         if ssh_key and remote_ssh_host and remote_ssh_basedir:
             # pay attention to latest "/", we use rsync!
             dir_to_upload = [f"/rebuild/{project}/logs/", f"/rebuild/{project}/buildinfos/"]
+            if upload_all:
+                dir_to_upload += [
+                    f"/rebuild/{project}/",
+                ]
             if package and package.status in ("reproducible", "unreproducible"):
                 if package.metadata.get("reproducible"):
                     metadata_path = get_intoto_metadata_package(
