@@ -17,6 +17,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
+import json
 import uuid
 
 import celery.bootsteps
@@ -36,7 +37,7 @@ from app.libs.common import get_celery_queued_tasks, get_project
 from app.libs.getter import getPackage, RebuilderDist, get_rebuild_packages, metadata_to_db
 from app.libs.rebuilder import getRebuilder
 from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package, \
-    merge_intoto_metadata
+    merge_intoto_metadata, process_attestation
 from app.libs.reporter import generate_results
 
 
@@ -162,57 +163,45 @@ def attest(package):
     if not os.path.exists(package.artifacts):
         raise RebuilderExceptionAttest(f"Cannot find package artifacts for {package}")
 
-    os.chdir(package.artifacts)
-    buildinfo = glob.glob(f"{package.name}*.buildinfo")
-    if not buildinfo:
-        raise RebuilderExceptionAttest(f"Cannot find buildinfo for {package}")
-    buildinfo = buildinfo[0]
-    with open(buildinfo) as fd:
-        parsed_buildinfo = debian.deb822.BuildInfo(fd)
+    gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
+    gpg_sign_keyid_unreproducible = Config["project"].get(project, {}).get('in-toto-sign-key-unreproducible-fpr', None)
+    if gpg_sign_keyid and gpg_sign_keyid_unreproducible:
+        if not os.path.exists(f"{package.artifacts}/summary.out"):
+            raise RebuilderExceptionAttest(f"Cannot find summary results for {package}")
+        with open(f"{package.artifacts}/summary.out") as fd:
+            summary = json.loads(fd.read())
 
-    if package.status == "reproducible":
-        gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
-    elif package.status == "unreproducible":
-        gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-unreproducible-fpr', None)
+        if not summary.get("sha256", None):
+            raise RebuilderExceptionAttest(f"Missing sha256 entries in summary!")
+        files = summary["sha256"]
+        repr_files = [f for f in files.keys()
+                      if files[f]["sha256"]["old"] == files[f]["sha256"]["new"]]
+        unrepr_files = [f for f in files.keys()
+                        if files[f]["sha256"]["old"] != files[f]["sha256"]["new"]]
+
+        package.metadata = {}
+        # generate in-toto reproducible metadata
+        if repr_files:
+            output_repr = f"{package.artifacts}/reproducible"
+            process_attestation(
+                package=package,
+                output=output_repr,
+                gpg_sign_keyid=gpg_sign_keyid,
+                files=repr_files,
+                unreproducible=False,
+            )
+        # generate in-toto unreproducible metadata
+        if unrepr_files:
+            output_unrepr = f"{package.artifacts}/unreproducible"
+            process_attestation(
+                package=package,
+                output=output_unrepr,
+                gpg_sign_keyid=gpg_sign_keyid_unreproducible,
+                files=unrepr_files,
+                unreproducible=True,
+            )
     else:
-        raise RebuilderExceptionAttest(f"Unknown status: {package.status}")
-    if gpg_sign_keyid:
-        # generate in-toto metadata
-        generate_intoto_metadata(package, gpg_sign_keyid, parsed_buildinfo)
-
-        os.chdir(package.artifacts)
-        tmp_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.link"
-        if not os.path.exists(tmp_link):
-            raise RebuilderExceptionAttest(f"Cannot find link for {package}")
-        final_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.{package.arch}.link"
-
-        # create final output directory
-        outputdir = get_intoto_metadata_package(
-            package, unreproducible=package.status == "unreproducible")
-        os.makedirs(outputdir, exist_ok=True)
-
-        shutil.copy2(os.path.join(package.artifacts, buildinfo), outputdir)
-        shutil.copy2(os.path.join(package.artifacts, tmp_link), f"{outputdir}/{final_link}")
-
-        # update buildinfo and metadata
-        package.url = f"{outputdir}/{buildinfo}"
-        package.metadata = f"{outputdir}/{final_link}"
-
-        os.chdir(os.path.join(outputdir, "../../"))
-        for binpkg in parsed_buildinfo.get_binary():
-            if not os.path.exists(binpkg):
-                os.symlink(package.name, binpkg)
-
-        # combine all available links (one link == one architecture)
-        os.chdir(outputdir)
-        merge_intoto_metadata(outputdir, gpg_sign_keyid)
-
-        # create symlink to new buildinfo and rebuild link file
-        os.chdir(outputdir)
-        if not os.path.exists("metadata"):
-            os.symlink(f"rebuild.{gpg_sign_keyid[:8].lower()}.link", "metadata")
-    else:
-        log.info(f"Unable to sign in-toto {package.status} metadata: "
+        log.info(f"Unable to sign in-toto reproducible/unreproducible metadata: "
                  f"no GPG keyid provided for project '{project}.")
 
     report.delay(package)
@@ -228,23 +217,35 @@ def report(package):
         log.error("Failed to parse package.")
         raise RebuilderExceptionReport from e
 
-    # collect log
     builder = getRebuilder(package.distribution)
     output_dir = f"/rebuild/{builder.project}"
+
+    # collect log
     log_dir = f"{output_dir}/logs"
     os.makedirs(log_dir, exist_ok=True)
-    src_log = f"{package.log}"
+    src_log = package.log
     log_file = os.path.basename(package.log)
     dst_log = f"{log_dir}/{log_file}"
     if not os.path.exists(src_log):
         raise RebuilderExceptionReport(f"Cannot find build log file {src_log}")
     if not os.path.exists(dst_log):
         shutil.move(src_log, dst_log)
-    if not os.path.exists(dst_log):
-        raise RebuilderExceptionReport(f"Cannot find build log file {dst_log}")
 
     # store new log location
     package.log = dst_log
+
+    buildinfo_dir = f"{output_dir}/buildinfos"
+    os.makedirs(buildinfo_dir, exist_ok=True)
+    src_buildinfo = package.buildinfos["new"]
+    buildinfo_file = os.path.basename(src_buildinfo)
+    dst_buildinfo = f"{buildinfo_dir}/{buildinfo_file}"
+    if not os.path.exists(src_buildinfo):
+        raise RebuilderExceptionReport(f"Cannot find buildinfo file {src_buildinfo}")
+    if not os.path.exists(dst_buildinfo):
+        shutil.move(src_buildinfo, dst_buildinfo)
+
+    # store new buildinfo location
+    package.buildinfos["new"] = dst_buildinfo
 
     # collect diffoscope if exists
     diffoscope_src_log = f"{package.artifacts}/diffoscope.out"
@@ -296,11 +297,18 @@ def upload(package=None, project=None, upload_results=False):
     try:
         if ssh_key and remote_ssh_host and remote_ssh_basedir:
             # pay attention to latest "/", we use rsync!
-            dir_to_upload = [f"/rebuild/{project}/logs/"]
+            dir_to_upload = [f"/rebuild/{project}/logs/", f"/rebuild/{project}/buildinfos/"]
             if package and package.status in ("reproducible", "unreproducible"):
-                metadata_path = get_intoto_metadata_package(
-                    package, unreproducible=package.status == "unreproducible")
-                dir_to_upload.append(f"{metadata_path}/")
+                if package.metadata.get("reproducible"):
+                    metadata_path = get_intoto_metadata_package(
+                        package, unreproducible=False
+                    )
+                    dir_to_upload.append(f"{metadata_path}/")
+                if package.metadata.get("unreproducible"):
+                    metadata_path_unrepr = get_intoto_metadata_package(
+                        package, unreproducible=True
+                    )
+                    dir_to_upload.append(f"{metadata_path_unrepr}/")
             if upload_results:
                 dir_to_upload.append(f"/rebuild/{project}/results/")
             for local_dir in dir_to_upload:

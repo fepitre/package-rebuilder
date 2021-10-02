@@ -74,6 +74,7 @@ def get_rebuild_packages(app, status=None, with_id=False):
     return rebuilt_packages
 
 
+# fixme: this is not compatible anymore with partial metadata generation
 def metadata_to_db(app, dist, unreproducible=False):
     result = []
     # get previous triggered packages builds
@@ -176,10 +177,11 @@ def getPackage(package_as_dict):
 class Package(dict):
     def __init__(self, name, epoch, version, arch, distribution, url,
                  metadata="", artifacts="", status="", log="", diffoscope="",
-                 retries=0):
+                 retries=0, buildinfos=""):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
                       distribution=distribution, url=url, metadata=metadata, artifacts=artifacts,
-                      status=status, log=log, diffoscope=diffoscope, retries=retries)
+                      status=status, log=log, diffoscope=diffoscope, retries=retries,
+                      buildinfos=buildinfos)
 
     def __getattr__(self, item):
         return self[item]

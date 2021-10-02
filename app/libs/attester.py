@@ -21,6 +21,7 @@ import os
 import subprocess
 import json
 import glob
+import shutil
 
 try:
     import koji
@@ -28,6 +29,7 @@ except ImportError:
     koji = None
 try:
     import debian.debian_support
+    import debian.deb822
 except ImportError:
     debian = None
 
@@ -58,16 +60,14 @@ def merge_intoto_metadata(output, gpg_sign_keyid):
             os.remove(f"{output}/rebuild.link")
 
 
-def generate_intoto_metadata(package, gpg_sign_keyid, buildinfo):
-    new_files = [f['name'] for f in buildinfo['checksums-sha256']
-                 if not f['name'].endswith('.dsc')]
-    cmd = [
-              "in-toto-run", f"--step-name=rebuild", "--no-command",
-              "--products"
-          ] + list(new_files)
-    cmd += ["--gpg", gpg_sign_keyid]
+def generate_intoto_metadata(cwd, output, gpg_sign_keyid, files):
+    if not files:
+        raise RebuilderExceptionAttest(f"No files provided for in-toto metadata generation!")
+    cmd = ["in-toto-run", f"--step-name=rebuild", "--no-command", "--products"] + files
+    cmd += ["--gpg", gpg_sign_keyid, "--metadata-directory", output]
     try:
-        subprocess.run(cmd, cwd=package.artifacts, check=True)
+        os.makedirs(output, exist_ok=True)
+        subprocess.run(cmd, cwd=cwd, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         raise RebuilderExceptionAttest(f"in-toto metadata generation failed: {str(e)}")
 
@@ -82,3 +82,38 @@ def get_intoto_metadata_basedir(distribution, unreproducible=False):
 def get_intoto_metadata_package(package, unreproducible=False):
     basedir = get_intoto_metadata_basedir(package.distribution, unreproducible=unreproducible)
     return f"{basedir}/{package.name}/{package.version}"
+
+
+def process_attestation(package, output, gpg_sign_keyid, files, unreproducible):
+    generate_intoto_metadata(package.artifacts, output, gpg_sign_keyid, files)
+
+    tmp_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.link"
+    if not os.path.exists(f"{output}/{tmp_link}"):
+        raise RebuilderExceptionAttest(f"Cannot find link for {package}")
+    final_link = f"rebuild.{gpg_sign_keyid[:8].lower()}.{package.arch}.link"
+
+    # create final output directory
+    outputdir = get_intoto_metadata_package(package, unreproducible=unreproducible)
+    os.makedirs(outputdir, exist_ok=True)
+
+    shutil.copy2(f"{output}/{tmp_link}", f"{outputdir}/{final_link}")
+
+    # update metadata
+    key = "unreproducible" if unreproducible else "reproducible"
+    package.metadata[key] = f"{outputdir}/{final_link}"
+
+    os.chdir(os.path.join(outputdir, "../../"))
+    with open(package.buildinfos["new"]) as fd:
+        parsed_buildinfo = debian.deb822.BuildInfo(fd)
+    for binpkg in parsed_buildinfo.get_binary():
+        if not os.path.exists(binpkg):
+            os.symlink(package.name, binpkg)
+
+    # combine all available links (one link == one architecture)
+    os.chdir(outputdir)
+    merge_intoto_metadata(outputdir, gpg_sign_keyid)
+
+    # create symlink to new link file
+    os.chdir(outputdir)
+    if not os.path.exists("metadata"):
+        os.symlink(f"rebuild.{gpg_sign_keyid[:8].lower()}.link", "metadata")
