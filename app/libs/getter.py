@@ -109,9 +109,9 @@ def metadata_to_db(app, dist):
 
         global_metadata = {}
         if metadata:
-            global_metadata["reproducible"]: metadata
+            global_metadata["reproducible"] = metadata
         if metadata_unrepr:
-            global_metadata["unreproducible"]: metadata_unrepr
+            global_metadata["unreproducible"] = metadata_unrepr
 
         package = getPackage({
             "name": name,
