@@ -234,18 +234,20 @@ def report(package):
     # store new log location
     package.log = dst_log
 
-    buildinfo_dir = f"{output_dir}/buildinfos"
-    os.makedirs(buildinfo_dir, exist_ok=True)
-    src_buildinfo = package.buildinfos["new"]
-    buildinfo_file = os.path.basename(src_buildinfo)
-    dst_buildinfo = f"{buildinfo_dir}/{buildinfo_file}"
-    if not os.path.exists(src_buildinfo):
-        raise RebuilderExceptionReport(f"Cannot find buildinfo file {src_buildinfo}")
-    if not os.path.exists(dst_buildinfo):
-        shutil.move(src_buildinfo, dst_buildinfo)
+    # new buildinfo exists only when build passed
+    if package.buildinfos.get("new", None):
+        buildinfo_dir = f"{output_dir}/buildinfos"
+        os.makedirs(buildinfo_dir, exist_ok=True)
+        src_buildinfo = package.buildinfos["new"]
+        buildinfo_file = os.path.basename(src_buildinfo)
+        dst_buildinfo = f"{buildinfo_dir}/{buildinfo_file}"
+        if not os.path.exists(src_buildinfo):
+            raise RebuilderExceptionReport(f"Cannot find buildinfo file {src_buildinfo}")
+        if not os.path.exists(dst_buildinfo):
+            shutil.move(src_buildinfo, dst_buildinfo)
 
-    # store new buildinfo location
-    package.buildinfos["new"] = dst_buildinfo
+        # store new buildinfo location
+        package.buildinfos["new"] = dst_buildinfo
 
     # collect diffoscope if exists
     diffoscope_src_log = f"{package.artifacts}/diffoscope.out"

@@ -159,11 +159,12 @@ class DebianRebuilder(BaseRebuilder):
             # This is for recording logfile entry into DB
             package.log = logfile
 
-            buildinfo = glob.glob(f"{package.artifacts}/{package.name}*.buildinfo")
-            if not buildinfo:
-                raise RebuilderExceptionBuild(f"Cannot find buildinfo for {package}")
-            buildinfo = buildinfo[0]
-            package.buildinfos["new"] = buildinfo
+            if result.returncode in (0, 2):
+                buildinfo = glob.glob(f"{package.artifacts}/{package.name}*.buildinfo")
+                if not buildinfo:
+                    raise RebuilderExceptionBuild(f"Cannot find buildinfo for {package}")
+                buildinfo = buildinfo[0]
+                package.buildinfos["new"] = buildinfo
 
             if result.returncode == 0:
                 package.status = "reproducible"
