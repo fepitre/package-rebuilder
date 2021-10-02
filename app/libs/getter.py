@@ -278,7 +278,7 @@ class DebianRepository:
         try:
             resp = requests.get(url)
             if resp.ok:
-                content = resp.text.rstrip('\n').split('\n')
+                content = [p.strip() for p in resp.text.strip('\n').split('\n')]
                 packages = set(sorted(content))
         except requests.exceptions.ConnectionError as e:
             log.error(f"Failed to get {pkgset_name}: {str(e)}")
@@ -341,7 +341,7 @@ class DebianRepository:
         if "full" not in package_sets:
             for pkgset_name in package_sets:
                 filtered_package_names += self.get_package_names_in_debian_set(pkgset_name)
-            filtered_package_names = set(sorted(filtered_package_names))
+            filtered_package_names = sorted(set(filtered_package_names))
             for package in self.packages:
                 if package.name in filtered_package_names:
                     packages_to_rebuild.append(package)
