@@ -127,7 +127,7 @@ class DebianRebuilder(BaseRebuilder):
             build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
         if self.extra_build_args:
             build_cmd += self.extra_build_args
-        build_cmd += [package.url]
+        build_cmd += [package.buildinfos["old"]]
 
         # rebuild
         env = os.environ.copy()
@@ -163,7 +163,7 @@ class DebianRebuilder(BaseRebuilder):
             if not buildinfo:
                 raise RebuilderExceptionBuild(f"Cannot find buildinfo for {package}")
             buildinfo = buildinfo[0]
-            package.buildinfos = {"old": package.url, "new": buildinfo}
+            package.buildinfos["new"] = buildinfo
 
             if result.returncode == 0:
                 package.status = "reproducible"

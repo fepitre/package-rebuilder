@@ -119,7 +119,6 @@ def metadata_to_db(app, dist):
             "arch": arch,
             "epoch": epoch,
             "status": "reproducible" if not metadata_unrepr else "unreproducible",
-            "url": "",
             "distribution": distribution,
             "buildinfos": {
                 "new": buildinfo
@@ -190,11 +189,11 @@ def getPackage(package_as_dict):
 
 
 class Package(dict):
-    def __init__(self, name, epoch, version, arch, distribution, url,
+    def __init__(self, name, epoch, version, arch, distribution, buildinfos,
                  metadata="", artifacts="", status="", log="", diffoscope="",
-                 retries=0, buildinfos=""):
+                 retries=0):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
-                      distribution=distribution, url=url, metadata=metadata, artifacts=artifacts,
+                      distribution=distribution, metadata=metadata, artifacts=artifacts,
                       status=status, log=log, diffoscope=diffoscope, retries=retries,
                       buildinfos=buildinfos)
 
@@ -320,7 +319,7 @@ class DebianRepository:
                 version=parsed_bn['version'],
                 arch=self.arch,
                 distribution=self.distribution,
-                url=f
+                buildinfos={"old": f}
             )
             packages[parsed_bn['name']].append(rebuild)
         for pkg in packages.keys():
@@ -466,7 +465,7 @@ class QubesRepository:
                 version=parsed_bn['version'],
                 arch=self.arch,
                 distribution=self.qubes_dist,
-                url=f,
+                buildinfos={"old": f},
             )
             packages[parsed_bn['name']].append(rebuild)
         for pkg in packages.keys():
