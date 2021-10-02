@@ -7,8 +7,7 @@ from app.tasks.rebuilder import get, _generate_results, _metadata_to_db
 # result = {"rebuild": []}
 # for project in ["qubesos", "debian"]:
 #     for dist in Config["project"][project]["dist"]:
-#         _metadata_to_db.delay(dist, unreproducible=False)
-#         _metadata_to_db.delay(dist, unreproducible=True)
+#         _metadata_to_db.delay(dist)
 
 # print("Trigger qubes-r4.1-vm-bullseye...")
 # get.delay("qubes-4.1-vm-bullseye.all")

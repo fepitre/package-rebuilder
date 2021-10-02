@@ -74,8 +74,7 @@ def get_rebuild_packages(app, status=None, with_id=False):
     return rebuilt_packages
 
 
-# fixme: this is not compatible anymore with partial metadata generation
-def metadata_to_db(app, dist, unreproducible=False):
+def metadata_to_db(app, dist):
     result = []
     # get previous triggered packages builds
     stored_packages = get_rebuild_packages(app)
@@ -85,35 +84,51 @@ def metadata_to_db(app, dist, unreproducible=False):
     if DEBIAN.get(dist.distribution):
         arch = DEBIAN_ARCHES.get(arch, arch)
 
-    metadata_basedir = get_intoto_metadata_basedir(distribution, unreproducible=unreproducible)
-    if not os.path.exists(metadata_basedir):
+    repr_basedir = get_intoto_metadata_basedir(distribution, unreproducible=False)
+    unrepr_basedir = get_intoto_metadata_basedir(distribution, unreproducible=True)
+    if not os.path.exists(repr_basedir) and not unrepr_basedir:
         return result
-    for name in os.listdir(metadata_basedir):
-        if not os.path.islink(f"{metadata_basedir}/{name}"):
-            for version in os.listdir(f"{metadata_basedir}/{name}"):
-                buildinfo_files = glob.glob(f"{metadata_basedir}/{name}/{version}/*.buildinfo")
-                for buildinfo in buildinfo_files:
-                    parsed_bn = parse_deb_buildinfo_fname(buildinfo)
-                    if not parsed_bn:
-                        continue
-                    if len(parsed_bn['arch']) > 1:
-                        continue
-                    if parsed_bn['arch'][0] != arch:
-                        continue
-                    metadata = glob.glob(f"{metadata_basedir}/{name}/{version}/rebuild.*.{arch}.link")
-                    package = getPackage({
-                        "name": parsed_bn["name"],
-                        "version": parsed_bn["version"],
-                        "arch": arch,
-                        "epoch": parsed_bn['epoch'],
-                        "status": "reproducible" if not unreproducible else "unreproducible",
-                        "url": buildinfo,
-                        "distribution": distribution,
-                        "metadata": metadata[0] if metadata else ""
-                    })
-                    package.log = get_latest_log_file(package)
-                    if not stored_packages.get(str(package), None):
-                        result.append(dict(package))
+    buildinfo_files = glob.glob(f"/rebuild/{dist.project}/buildinfos/*.buildinfo")
+    for buildinfo in buildinfo_files:
+        parsed_bn = parse_deb_buildinfo_fname(buildinfo)
+        name = parsed_bn["name"]
+        version = parsed_bn["version"]
+        epoch = parsed_bn['epoch']
+        if not parsed_bn:
+            continue
+        if len(parsed_bn['arch']) > 1:
+            continue
+        if parsed_bn['arch'][0] != arch:
+            continue
+        # due partial metadata generation we need to check in unreproducible metadata
+        # exists in order to know the global status of a given package
+        metadata = glob.glob(f"{repr_basedir}/{name}/{version}/rebuild.*.{arch}.link")
+        metadata = metadata[0] if metadata else ""
+        metadata_unrepr = glob.glob(f"{unrepr_basedir}/{name}/{version}/rebuild.*.{arch}.link")
+        metadata_unrepr = metadata_unrepr[0] if metadata_unrepr else ""
+
+        global_metadata = {}
+        if metadata:
+            global_metadata["reproducible"]: metadata
+        if metadata_unrepr:
+            global_metadata["unreproducible"]: metadata_unrepr
+
+        package = getPackage({
+            "name": name,
+            "version": version,
+            "arch": arch,
+            "epoch": epoch,
+            "status": "reproducible" if not metadata_unrepr else "unreproducible",
+            "url": "",
+            "distribution": distribution,
+            "buildinfos": {
+                "new": buildinfo
+            },
+            "metadata": global_metadata
+        })
+        package.log = get_latest_log_file(package)
+        if not stored_packages.get(str(package), None):
+            result.append(dict(package))
     return result
 
 

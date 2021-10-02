@@ -353,12 +353,11 @@ def _generate_results(project):
 
 
 @app.task(base=BaseTask)
-def _metadata_to_db(dist, unreproducible=False):
+def _metadata_to_db(dist):
     try:
         dist = RebuilderDist(dist)
-        log.debug(f"Provisionning DB for {dist} "
-                  f"({'reproducible' if not unreproducible else 'unreproducible'} data)")
-        for p in metadata_to_db(app, dist, unreproducible=unreproducible):
+        log.debug(f"Provisionning DB for {dist} data)")
+        for p in metadata_to_db(app, dist):
             app.backend._store_result(
                 task_id=uuid.uuid4(),
                 result={"report": [p]},
