@@ -1,0 +1,38 @@
+{
+  "md5": {
+    "bash-doc_5.1-2+b3_all.deb": {
+      "md5": {
+        "old": "13e720494bec2c12ac3db5d96b2d30bd",
+        "new": "13e720494bec2c12ac3db5d96b2d30bd"
+      },
+      "size": {
+        "old": "13",
+        "new": "13"
+      }
+    }
+  },
+  "sha1": {
+    "bash-doc_5.1-2+b3_all.deb": {
+      "sha1": {
+        "old": "a4c8d56a19c5978759cb113d938ef65531ca7322",
+        "new": "a4c8d56a19c5978759cb113d938ef65531ca7322"
+      },
+      "size": {
+        "old": "13",
+        "new": "13"
+      }
+    }
+  },
+  "sha256": {
+    "bash-doc_5.1-2+b3_all.deb": {
+      "sha256": {
+        "old": "9dedc2897e99d9250d6a9962533fbdb2e8bfed9f85452cf71b8edaa3b9ae0031",
+        "new": "9dedc2897e99d9250d6a9962533fbdb2e8bfed9f85452cf71b8edaa3b9ae0031"
+      },
+      "size": {
+        "old": "13",
+        "new": "13"
+      }
+    }
+  }
+}

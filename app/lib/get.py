@@ -17,7 +17,6 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-import glob
 import os
 import re
 import requests
@@ -34,141 +33,10 @@ except ImportError:
     debian = None
 
 from packaging.version import parse as parse_version
-from app.libs.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_project, \
-    get_backend_tasks, rebuild_task_parser, parse_deb_buildinfo_fname, parse_rpm_buildinfo_fname
-from app.libs.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
-from app.libs.logger import log
-from app.libs.rebuilder import get_latest_log_file
-from app.libs.attester import get_intoto_metadata_basedir
-
-
-def get_rebuild_packages(app, status=None, with_id=False):
-    rebuilt_packages = {}
-    failed_packages = {}
-
-    parsed_packages = []
-    tasks = get_backend_tasks(app)
-    for task in tasks:
-        task_status, parsed_task = rebuild_task_parser(task)
-        if parsed_task:
-            for p in parsed_task:
-                package = getPackage(p)
-                if with_id:
-                    package["_id"] = task["_id"]
-                # When a job fail it has retry/failure status from celery point of view
-                # but 'report' queue generate a success with "failure" status. We keep them
-                # for log and celery status reference.
-                if task_status == "success" and \
-                        package.status not in ("reproducible", "unreproducible"):
-                    failed_packages[str(package)] = package
-                    continue
-                if status and package.status not in status:
-                    continue
-                parsed_packages.append(package)
-    # create dict to help into getting package info faster
-    for p in sorted(parsed_packages, key=lambda x: str(x)):
-        if failed_packages.get(str(p), None):
-            p.log = failed_packages[str(p)].log
-            p.retries = failed_packages[str(p)].retries
-        rebuilt_packages[str(p)] = p
-    return rebuilt_packages
-
-
-def metadata_to_db(app, dist):
-    result = []
-    # get previous triggered packages builds
-    stored_packages = get_rebuild_packages(app)
-
-    distribution = dist.distribution
-    arch = dist.arch
-    if DEBIAN.get(dist.distribution):
-        arch = DEBIAN_ARCHES.get(arch, arch)
-
-    repr_basedir = get_intoto_metadata_basedir(distribution, unreproducible=False)
-    unrepr_basedir = get_intoto_metadata_basedir(distribution, unreproducible=True)
-    if not os.path.exists(repr_basedir) and not unrepr_basedir:
-        return result
-    buildinfo_files = glob.glob(f"/rebuild/{dist.project}/buildinfos/*.buildinfo")
-    for buildinfo in buildinfo_files:
-        parsed_bn = parse_deb_buildinfo_fname(buildinfo)
-        name = parsed_bn["name"]
-        version = parsed_bn["version"]
-        epoch = parsed_bn['epoch']
-        if not parsed_bn:
-            continue
-        if len(parsed_bn['arch']) > 1:
-            continue
-        if parsed_bn['arch'][0] != arch:
-            continue
-        # due partial metadata generation we need to check in unreproducible metadata
-        # exists in order to know the global status of a given package
-        metadata = glob.glob(f"{repr_basedir}/{name}/{version}/rebuild.*.{arch}.link")
-        metadata = metadata[0] if metadata else ""
-        metadata_unrepr = glob.glob(f"{unrepr_basedir}/{name}/{version}/rebuild.*.{arch}.link")
-        metadata_unrepr = metadata_unrepr[0] if metadata_unrepr else ""
-
-        global_metadata = {}
-        if metadata:
-            global_metadata["reproducible"] = metadata
-        if metadata_unrepr:
-            global_metadata["unreproducible"] = metadata_unrepr
-
-        package = getPackage({
-            "name": name,
-            "version": version,
-            "arch": arch,
-            "epoch": epoch,
-            "status": "reproducible" if not metadata_unrepr else "unreproducible",
-            "distribution": distribution,
-            "buildinfos": {
-                "new": buildinfo
-            },
-            "metadata": global_metadata
-        })
-        package.log = get_latest_log_file(package)
-        if not stored_packages.get(str(package), None):
-            result.append(dict(package))
-    return result
-
-
-class RebuilderDist:
-    def __init__(self, dist):
-        try:
-            # 'dist' is defined as:
-            #   {distribution}+{package_set_1}+{package_set_2}+...+{package_set_N}.{arch}
-            #  where 'distribution' is the distribution name, 'package_set_*' defines known
-            #  distribution set of packages and 'arch' is architecture.
-
-            # Examples:
-            # qubes-4.1-vm-bullseye.amd64
-            # qubes-4.1-vm-fc32.noarch
-            # sid.all
-            # bullseye+essential+build_essential.all
-            # fedora-33.amd64
-
-            self.distribution_with_package_sets, self.arch = dist.rsplit('.', 1)
-            self.distribution, package_sets = f"{self.distribution_with_package_sets}+".split('+', 1)
-            self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
-                                 if pkg_set]
-            # If no package set is provided, we understand it as "full"
-            if not self.package_sets:
-                self.package_sets = ["full"]
-            self.project = get_project(self.distribution)
-        except ValueError:
-            raise RebuilderExceptionDist(f"Cannot parse dist: {dist}.")
-
-        if is_qubes(self.distribution):
-            self.repo = QubesRepository(self.distribution, self.arch)
-        elif is_fedora(self.distribution):
-            self.repo = FedoraRepository(self.distribution)
-        elif is_debian(self.distribution):
-            self.repo = DebianRepository(self.distribution, self.arch, self.package_sets)
-        else:
-            raise RebuilderExceptionDist(f"Unsupported distribution: {dist}")
-
-    def __repr__(self):
-        result = f'{self.distribution}.{self.arch}'
-        return result
+from app.lib.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_project, \
+    parse_deb_buildinfo_fname, parse_rpm_buildinfo_fname
+from app.lib.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
+from app.lib.log import log
 
 
 def getPackage(package_as_dict):
@@ -190,12 +58,12 @@ def getPackage(package_as_dict):
 
 class Package(dict):
     def __init__(self, name, epoch, version, arch, distribution, buildinfos,
-                 metadata="", artifacts="", status="", log="", diffoscope="",
-                 retries=0):
+                 metadata=None, artifacts=None, status=None, log=None, diffoscope=None,
+                 retries=0, files=None):
         dict.__init__(self, name=name, epoch=epoch, version=version, arch=arch,
                       distribution=distribution, metadata=metadata, artifacts=artifacts,
                       status=status, log=log, diffoscope=diffoscope, retries=retries,
-                      buildinfos=buildinfos)
+                      buildinfos=buildinfos, files=files)
 
     def __getattr__(self, item):
         return self[item]
@@ -265,7 +133,8 @@ class DebianRepository:
         try:
             if is_debian(self.distribution):
                 if debian is None:
-                    raise RebuilderExceptionGet(f"Cannot build {self.distribution}: python-debian not found")
+                    raise RebuilderExceptionGet(
+                        f"Cannot build {self.distribution}: python-debian not found")
             else:
                 raise RebuilderExceptionGet(f"Unknown dist: {self.distribution}")
         except (ValueError, FileNotFoundError) as e:
@@ -284,9 +153,9 @@ class DebianRepository:
             log.error(f"Failed to get {pkgset_name}: {str(e)}")
         return packages
 
-    def get_buildinfo_files(self, arch):
+    def get_buildinfo_files(self):
         files = []
-        url = f"https://buildinfos.debian.net/buildinfo-pool_{self.distribution}_{arch}.list"
+        url = f"https://buildinfos.debian.net/buildinfo-pool_{self.distribution}_{self.arch}.list"
         try:
             resp = requests.get(url)
             if not resp.ok:
@@ -302,7 +171,7 @@ class DebianRepository:
     def get_packages(self):
         packages = {}
         latest_packages = []
-        for f in self.get_buildinfo_files(self.arch):
+        for f in self.get_buildinfo_files():
             parsed_bn = parse_deb_buildinfo_fname(f)
             if not parsed_bn:
                 continue
@@ -313,7 +182,7 @@ class DebianRepository:
                 continue
             if parsed_bn['arch'][0] != self.arch:
                 continue
-            rebuild = Package(
+            rebuild = DebianPackage(
                 name=parsed_bn['name'],
                 epoch=parsed_bn['epoch'],
                 version=parsed_bn['version'],
@@ -477,3 +346,44 @@ class QubesRepository:
         if not self.packages:
             self.packages = self.get_packages()
         return self.packages
+
+
+class RebuilderDist:
+    def __init__(self, dist):
+        try:
+            # 'dist' is defined as:
+            #   {distribution}+{package_set_1}+{package_set_2}+...+{package_set_N}.{arch}
+            #  where 'distribution' is the distribution name, 'package_set_*' defines known
+            #  distribution set of packages and 'arch' is architecture.
+
+            # Examples:
+            # qubes-4.1-vm-bullseye.amd64
+            # qubes-4.1-vm-fc32.noarch
+            # sid.all
+            # bullseye+essential+build_essential.all
+            # fedora-33.amd64
+
+            self.distribution_with_package_sets, self.arch = dist.rsplit('.', 1)
+            self.distribution, package_sets = \
+                f"{self.distribution_with_package_sets}+".split('+', 1)
+            self.package_sets = [pkg_set for pkg_set in package_sets.split('+')
+                                 if pkg_set]
+            # If no package set is provided, we understand it as "full"
+            if not self.package_sets:
+                self.package_sets = ["full"]
+            self.project = get_project(self.distribution)
+        except ValueError:
+            raise RebuilderExceptionDist(f"Cannot parse dist: {dist}.")
+
+        if is_qubes(self.distribution):
+            self.repo = QubesRepository(self.distribution, self.arch)
+        elif is_fedora(self.distribution):
+            self.repo = FedoraRepository(self.distribution)
+        elif is_debian(self.distribution):
+            self.repo = DebianRepository(self.distribution, self.arch, self.package_sets)
+        else:
+            raise RebuilderExceptionDist(f"Unsupported distribution: {dist}")
+
+    def __repr__(self):
+        result = f'{self.distribution}.{self.arch}'
+        return result

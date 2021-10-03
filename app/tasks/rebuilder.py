@@ -26,16 +26,17 @@ import os
 import shutil
 
 from app.celery import app
-from app.libs.logger import log
+from app.lib.log import log
 from app.config.config import Config
-from app.libs.exceptions import RebuilderException, \
+from app.lib.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
-from app.libs.common import get_celery_queued_tasks, get_project
-from app.libs.getter import getPackage, RebuilderDist, get_rebuild_packages, metadata_to_db
-from app.libs.rebuilder import getRebuilder
-from app.libs.attester import process_attestation
-from app.libs.reporter import generate_results
+from app.lib.common import get_project
+from app.lib.get import getPackage, RebuilderDist
+from app.lib.tool import metadata_to_db, get_rebuild_packages, get_celery_queued_tasks
+from app.lib.rebuild import getRebuilder
+from app.lib.attest import process_attestation
+from app.lib.report import generate_results
 
 
 # fixme: improve serialize/deserialize Package
@@ -66,6 +67,32 @@ class RebuildTask(BaseTask):
     def on_success(self, retval, task_id, args, kwargs):
         package = retval["rebuild"][0]
         attest.delay(package)
+
+
+@app.task(base=BaseTask)
+def _generate_results(project):
+    # generate plots from results
+    try:
+        log.debug(f"Generating results for project {project}")
+        generate_results(app, project)
+    except RebuilderException as e:
+        log.error(f"Failed to generate plots: {str(e)}")
+    upload.delay(project=project, upload_results=True)
+
+
+@app.task(base=BaseTask)
+def _metadata_to_db(dist):
+    try:
+        dist = RebuilderDist(dist)
+        log.debug(f"Provisionning DB for {dist} data)")
+        for p in metadata_to_db(app, dist):
+            app.backend._store_result(
+                task_id=uuid.uuid4(),
+                result={"report": [p]},
+                state="SUCCESS"
+            )
+    except Exception as e:
+        log.error(f"Failed to generate DB results: {str(e)}")
 
 
 @app.on_after_finalize.connect
@@ -176,7 +203,6 @@ def attest(package):
         unrepr_files = [f for f in files.keys()
                         if files[f]["sha256"]["old"] != files[f]["sha256"]["new"]]
 
-        package.metadata = {}
         # generate in-toto reproducible metadata
         if repr_files:
             output_repr = f"{package.artifacts}/reproducible"
@@ -185,7 +211,7 @@ def attest(package):
                 output=output_repr,
                 gpg_sign_keyid=gpg_sign_keyid,
                 files=repr_files,
-                unreproducible=False,
+                reproducible=True,
             )
         # generate in-toto unreproducible metadata
         if unrepr_files:
@@ -195,7 +221,7 @@ def attest(package):
                 output=output_unrepr,
                 gpg_sign_keyid=gpg_sign_keyid_unreproducible,
                 files=unrepr_files,
-                unreproducible=True,
+                reproducible=False,
             )
     else:
         log.info(f"Unable to sign in-toto reproducible/unreproducible metadata: "
@@ -347,29 +373,3 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
         raise RebuilderExceptionUpload("Failed to upload")
     result = {"upload": [dict(package)] if package else []}
     return result
-
-
-@app.task(base=BaseTask)
-def _generate_results(project):
-    # generate plots from results
-    try:
-        log.debug(f"Generating results for project {project}")
-        generate_results(app, project)
-    except RebuilderException as e:
-        log.error(f"Failed to generate plots: {str(e)}")
-    upload.delay(project=project, upload_results=True)
-
-
-@app.task(base=BaseTask)
-def _metadata_to_db(dist):
-    try:
-        dist = RebuilderDist(dist)
-        log.debug(f"Provisionning DB for {dist} data)")
-        for p in metadata_to_db(app, dist):
-            app.backend._store_result(
-                task_id=uuid.uuid4(),
-                result={"report": [p]},
-                state="SUCCESS"
-            )
-    except Exception as e:
-        log.error(f"Failed to generate DB results: {str(e)}")

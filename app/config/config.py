@@ -45,9 +45,10 @@ config = configparser.RawConfigParser(allow_no_value=False)
 
 # fixme: put the configuration elsewhere
 config_path = f"{os.path.curdir}/rebuilder.conf"
-if not os.path.exists(config_path):
-    raise ValueError(f"Cannot find config file: {config_path}")
-config.read(config_path)
+# if not os.path.exists(config_path):
+#     raise ValueError(f"Cannot find config file: {config_path}")
+if os.path.exists(config_path):
+    config.read(config_path)
 
 Config = {
     "celery": {

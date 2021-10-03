@@ -1,0 +1,38 @@
+{
+  "md5": {
+    "0xffff_0.8-1+b1_amd64.deb": {
+      "md5": {
+        "old": "b07030b2a4c624ec32489c17840ad825",
+        "new": "b07030b2a4c624ec32489c17840ad825"
+      },
+      "size": {
+        "old": "11",
+        "new": "11"
+      }
+    }
+  },
+  "sha1": {
+    "0xffff_0.8-1+b1_amd64.deb": {
+      "sha1": {
+        "old": "0f9dc0110e3cb10b9e848dc3837e67a9f7fd8abb",
+        "new": "0f9dc0110e3cb10b9e848dc3837e67a9f7fd8abb"
+      },
+      "size": {
+        "old": "11",
+        "new": "11"
+      }
+    }
+  },
+  "sha256": {
+    "0xffff_0.8-1+b1_amd64.deb": {
+      "sha256": {
+        "old": "f934412d2dcf446a6ff94436e6b9412c1bbace53098919e275522ce471a49cbf",
+        "new": "f934412d2dcf446a6ff94436e6b9412c1bbace53098919e275522ce471a49cbf"
+      },
+      "size": {
+        "old": "11",
+        "new": "11"
+      }
+    }
+  }
+}

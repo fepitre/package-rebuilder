@@ -26,8 +26,8 @@ import tempfile
 import glob
 
 from app.config.config import Config
-from app.libs.common import is_qubes, is_debian, is_fedora, get_project
-from app.libs.exceptions import RebuilderExceptionBuild
+from app.lib.common import is_qubes, is_debian, is_fedora
+from app.lib.exceptions import RebuilderExceptionBuild
 
 
 # fixme: don't use wrapper but import directly Rebuilder functions
@@ -42,8 +42,8 @@ def getRebuilder(distribution, **kwargs):
             rebuilder = QubesRebuilderDEB(
                 qubes_release=qubes_release,
                 package_set=package_set,
-                snapshot_query_url=Config["project"].get("qubesos", {})['snapshot'],
-                snapshot_mirror=Config["project"].get("qubesos", {})['snapshot'],
+                snapshot_query_url=Config["project"].get("qubesos", {}).get('snapshot', None),
+                snapshot_mirror=Config["project"].get("qubesos", {}).get('snapshot', None),
                 **kwargs
             )
         elif is_fedora(distribution):
@@ -54,8 +54,8 @@ def getRebuilder(distribution, **kwargs):
         rebuilder = FedoraRebuilder(**kwargs)
     elif is_debian(distribution):
         rebuilder = DebianRebuilder(
-            snapshot_query_url=Config["project"].get("debian", {})['snapshot'],
-            snapshot_mirror=Config["project"].get("debian", {})['snapshot'],
+            snapshot_query_url=Config["project"].get("debian", {}).get('snapshot', None),
+            snapshot_mirror=Config["project"].get("debian", {}).get('snapshot', None),
             **kwargs
         )
     else:
@@ -63,28 +63,10 @@ def getRebuilder(distribution, **kwargs):
     return rebuilder
 
 
-def get_latest_log_file(package):
-    builder = getRebuilder(package.distribution)
-    output_dir = f"/rebuild/{builder.project}"
-    pkg_log_files = glob.glob(f"{output_dir}/logs/{package}-*.log")
-    pkg_log_files = sorted([f for f in pkg_log_files], reverse=True)
-    return pkg_log_files[0] if pkg_log_files else ""
-
-
-def get_latest_diffoscope_file(package):
-    diffoscope_log = ""
-    if not package.log:
-        return diffoscope_log
-    log = f"{os.path.dirname(package.log)}/{os.path.splitext(package.log)[0]}.diffoscope.log"
-    if os.path.exists(log):
-        diffoscope_log = log
-    return diffoscope_log
-
-
 class BaseRebuilder:
     def __init__(self, **kwargs):
         self.sign_keyid = kwargs.get('sign_keyid', None)
-        self.artifacts_dir = "/artifacts"
+        self.artifacts_dir = kwargs.get('artifacts_dir', "/var/lib/rebuilder/artifacts")
 
     @staticmethod
     def gen_temp_dir(package):

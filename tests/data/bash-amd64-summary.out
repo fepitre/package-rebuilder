@@ -1,0 +1,68 @@
+{
+  "md5": {
+    "bash-static_5.1-2+b3_amd64.deb": {
+      "md5": {
+        "old": "fd0a826d185a88742ecfb359f300b28b",
+        "new": "fd0a826d185a88742ecfb359f300b28c"
+      },
+      "size": {
+        "old": "15",
+        "new": "16"
+      }
+    },
+    "bash_5.1-2+b3_amd64.deb": {
+      "md5": {
+        "old": "d22b604a4a16e502b2e1685115f7b31a",
+        "new": "d22b604a4a16e502b2e1685115f7b31a"
+      },
+      "size": {
+        "old": "9",
+        "new": "9"
+      }
+    }
+  },
+  "sha1": {
+    "bash-static_5.1-2+b3_amd64.deb": {
+      "sha1": {
+        "old": "85b2c8fd44cebca4647809b0ae03fbf91e1e8fdd",
+        "new": "85b2c8fd44cebca4647809b0ae03fbf91e1e8fde"
+      },
+      "size": {
+        "old": "15",
+        "new": "16"
+      }
+    },
+    "bash_5.1-2+b3_amd64.deb": {
+      "sha1": {
+        "old": "9a5f8329f3973a79f5417a4000ed1108f36c7c61",
+        "new": "9a5f8329f3973a79f5417a4000ed1108f36c7c61"
+      },
+      "size": {
+        "old": "9",
+        "new": "9"
+      }
+    }
+  },
+  "sha256": {
+    "bash-static_5.1-2+b3_amd64.deb": {
+      "sha256": {
+        "old": "da247816d01110c1071433c8eec813aa9c4a8424311d32bbd8cf38b60ef5f1a5",
+        "new": "da247816d01110c1071433c8eec813aa9c4a8424311d32bbd8cf38b60ef5f1a6"
+      },
+      "size": {
+        "old": "15",
+        "new": "16"
+      }
+    },
+    "bash_5.1-2+b3_amd64.deb": {
+      "sha256": {
+        "old": "b7feb754854a0188b703e200b4dcb502acffcc42d601948972944bb7e8ca05cf",
+        "new": "b7feb754854a0188b703e200b4dcb502acffcc42d601948972944bb7e8ca05cf"
+      },
+      "size": {
+        "old": "9",
+        "new": "9"
+      }
+    }
+  }
+}

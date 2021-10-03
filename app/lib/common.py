@@ -19,8 +19,6 @@
 #
 
 import os
-import json
-import base64
 
 try:
     import koji
@@ -92,96 +90,3 @@ def parse_deb_buildinfo_fname(buildinfo):
         parsed_bn['version'] = parsed_nv._BaseVersion__full_version
         parsed_bn['arch'] = parsed_tmp[2].split('-')
     return parsed_bn
-
-
-# TODO: convert and refactor below functions into client to be used notably for creating a BASH cli
-
-def get_celery_active_tasks(app, name=None):
-    inspect = app.control.inspect()
-    tasks = []
-    queues = []
-    active = inspect.active()
-    if active:
-        queues.append(active)
-    for d in queues:
-        for _, queue in d.items():
-            for task in queue:
-                if name and task.get("name", None) != name:
-                    continue
-                if task.get('args', None):
-                    tasks.append(task['args'][0])
-    return tasks
-
-
-def rebuild_task_parser(task):
-    parsed_task = None
-    task_status = task["status"].lower()
-    # Get successful build from 'report' queue as a build is considered finished
-    # when all the post process like collecting logs is done
-    if task["status"] == 'SUCCESS' and isinstance(task["result"], dict) \
-            and task["result"].get("report", None):
-        parsed_task = task["result"]["report"]
-    elif (task["status"] == 'FAILURE' or task["status"] == 'RETRY') \
-            and task["result"]["exc_type"] == "RebuilderExceptionBuild":
-        # We have stored package info in exception
-        parsed_task = task["result"]["exc_message"][0]
-        parsed_task[0]["status"] = task_status
-    return task_status, parsed_task
-
-
-def get_celery_queued_tasks(app, queue_name):
-    with app.pool.acquire(block=True) as conn:
-        tasks = conn.default_channel.client.lrange(queue_name, 0, -1)
-
-    submitted_tasks = []
-    for task in tasks:
-        j = json.loads(task)
-        body = json.loads(base64.b64decode(j['body']))
-        submitted_tasks.append(body[0][0])
-    return submitted_tasks
-
-
-def get_celery_unacked_tasks(app):
-    with app.pool.acquire(block=True) as conn:
-        tasks = conn.default_channel.client.hvals("unacked")
-
-    submitted_tasks = []
-    for task in tasks:
-        task = task.decode("utf-8")
-        j = json.loads(task)
-        if not isinstance(j, list):
-            continue
-        j = j[0]
-        body = json.loads(base64.b64decode(j['body']))
-        submitted_tasks.append(body[0][0])
-    return submitted_tasks
-
-
-def get_backend_tasks(app):
-    backend = app.backend
-    col = backend.collection.find()
-    results = []
-    for _, doc in enumerate(col):
-        r = doc
-        if not isinstance(doc["result"], str):
-            continue
-        r["result"] = json.loads(doc["result"])
-        results.append(r)
-    return results
-
-
-def delete_backend_tasks_by_celery_status(app, status):
-    backend = app.backend
-    col = backend.collection.find()
-    for _, doc in enumerate(col):
-        if doc["status"] == status:
-            backend._forget(doc["_id"])
-
-
-def delete_backend_tasks_by_backend_id(app, ids):
-    backend = app.backend
-    for id in ids:
-        try:
-            backend._forget(id)
-        except Exception:
-            continue

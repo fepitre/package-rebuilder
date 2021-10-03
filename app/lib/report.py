@@ -25,10 +25,11 @@ import matplotlib.pyplot as plt
 
 from jinja2 import Template
 
-from app.libs.common import get_celery_active_tasks
 from app.config.config import Config
-from app.libs.exceptions import RebuilderException
-from app.libs.getter import RebuilderDist, get_rebuild_packages, getPackage
+from app.lib.exceptions import RebuilderException
+from app.lib.common import REBUILD_DIR
+from app.lib.get import RebuilderDist, getPackage
+from app.lib.tool import get_rebuild_packages, get_celery_active_tasks
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
@@ -138,7 +139,7 @@ def generate_results(app, project):
                         if isinstance(p, dict)]
     try:
         results = {}
-        results_path = f"/rebuild/{project}/results"
+        results_path = f"/var/lib/rebuild/rebuild/{project}/results"
         os.makedirs(results_path, exist_ok=True)
         for dist in Config["project"][project]["dist"]:
             dist = RebuilderDist(dist)

@@ -74,7 +74,7 @@ services:
     volumes:
       - .:/app
 # uploader worker needs in-toto directory for checking if metadata exists
-      - '/var/lib/rebuilder/rebuild:/rebuild'
+      - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
     depends_on:
       - broker
       - backend
@@ -96,7 +96,7 @@ services:
     volumes:
       - .:/app
 # rebuilder worker(s) need(s) artifacts directory
-      - '/var/lib/rebuilder/artifacts:/artifacts'
+      - '/var/lib/rebuilder/artifacts:/var/lib/rebuilder/artifacts'
     depends_on:
       - broker
       - backend
@@ -122,8 +122,8 @@ services:
     volumes:
       - .:/app
 # attester need artifacts directory, in-toto repository and GPG for signing in-toto metadata
-      - '/var/lib/rebuilder/artifacts:/artifacts'
-      - '/var/lib/rebuilder/rebuild:/rebuild'
+      - '/var/lib/rebuilder/artifacts:/var/lib/rebuilder/artifacts'
+      - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
       - '/var/lib/rebuilder/gnupg:/root/.gnupg'
     depends_on:
       - broker
@@ -143,8 +143,8 @@ services:
     volumes:
       - .:/app
 # reporter worker needs artifacts, and in-toto directory
-      - '/var/lib/rebuilder/artifacts:/artifacts'
-      - '/var/lib/rebuilder/rebuild:/rebuild'
+      - '/var/lib/rebuilder/artifacts:/var/lib/rebuilder/artifacts'
+      - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
     depends_on:
       - broker
       - backend
@@ -162,7 +162,7 @@ services:
     volumes:
       - .:/app
 # uploader worker needs in-toto directory and SSH key for rsyncing on remote location
-      - '/var/lib/rebuilder/rebuild:/rebuild'
+      - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
     depends_on:
       - broker
