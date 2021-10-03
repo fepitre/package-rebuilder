@@ -23,9 +23,7 @@ import uuid
 import celery.bootsteps
 import subprocess
 import os
-import glob
 import shutil
-import debian.deb822
 
 from app.celery import app
 from app.libs.logger import log
@@ -36,8 +34,7 @@ from app.libs.exceptions import RebuilderException, \
 from app.libs.common import get_celery_queued_tasks, get_project
 from app.libs.getter import getPackage, RebuilderDist, get_rebuild_packages, metadata_to_db
 from app.libs.rebuilder import getRebuilder
-from app.libs.attester import generate_intoto_metadata, get_intoto_metadata_package, \
-    merge_intoto_metadata, process_attestation
+from app.libs.attester import process_attestation
 from app.libs.reporter import generate_results
 
 
