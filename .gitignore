@@ -1,3 +1,5 @@
 .idea
 test.py
 **/__pycache__/**
+artifacts
+.coverage
