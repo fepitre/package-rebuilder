@@ -205,20 +205,16 @@ def attest(package):
 
         # generate in-toto reproducible metadata
         if repr_files:
-            output_repr = f"{package.artifacts}/reproducible"
             process_attestation(
                 package=package,
-                output=output_repr,
                 gpg_sign_keyid=gpg_sign_keyid,
                 files=repr_files,
                 reproducible=True,
             )
         # generate in-toto unreproducible metadata
         if unrepr_files:
-            output_unrepr = f"{package.artifacts}/unreproducible"
             process_attestation(
                 package=package,
-                output=output_unrepr,
                 gpg_sign_keyid=gpg_sign_keyid_unreproducible,
                 files=unrepr_files,
                 reproducible=False,
