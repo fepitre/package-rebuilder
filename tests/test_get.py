@@ -1,3 +1,4 @@
+import os
 import pytest
 import pytest_mock
 import requests_mock
@@ -7,6 +8,8 @@ from unittest.mock import MagicMock, patch
 from app.lib.exceptions import RebuilderExceptionDist
 from app.lib.get import RebuilderDist, DebianRepository, QubesRepository, \
     DebianPackage, QubesPackage, getPackage
+
+TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 
 
 def test_dist_debian():
@@ -77,10 +80,10 @@ def test_package_qubesos():
 
 
 def test_repo_debian(requests_mock):
-    with open("data/buildinfo-pool_unstable_amd64.list", "r") as fd:
+    with open(f"{TEST_DIR}/data/buildinfo-pool_unstable_amd64.list", "r") as fd:
         requests_mock.get("https://buildinfos.debian.net/buildinfo-pool_unstable_amd64.list",
                           text=fd.read())
-    with open("data/test.pkgset", "r") as fd:
+    with open(f"{TEST_DIR}/data/test.pkgset", "r") as fd:
         requests_mock.get("https://jenkins.debian.net/userContent/reproducible/debian/pkg-sets/"
                           "unstable/test.pkgset", text=fd.read())
     dist = RebuilderDist("unstable+test.amd64")
@@ -106,7 +109,7 @@ def test_repo_debian(requests_mock):
 @patch("app.lib.get.subprocess.run")
 def test_repo_qubesos_rsync(mock_run):
     mock_stdout = MagicMock()
-    with open("data/rsync_result.txt", "r") as fd:
+    with open(f"{TEST_DIR}/data/rsync_result.txt", "r") as fd:
         mock_stdout.configure_mock(
             **{
                 "stdout.decode.return_value": fd.read()

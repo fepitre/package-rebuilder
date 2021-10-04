@@ -3,18 +3,14 @@ import os
 import shutil
 import tempfile
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
-import app.lib.common
 from app.lib.exceptions import RebuilderExceptionAttest
 from app.lib.get import getPackage
 from app.lib.attest import process_attestation
 
+TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
+
 GPG_SIGN_KEY_ID = "632F8C69E01B25C9E0C3ADF2F360C0D259FB650C"
 GPG_SIGN_KEY_UNREPR_ID = "417490C2E134631C893D34F857D7E041A878DA99"
-TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 
 
 def test_attest_reproducible():

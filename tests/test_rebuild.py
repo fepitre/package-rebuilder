@@ -10,6 +10,8 @@ from app.lib.exceptions import RebuilderExceptionBuild
 from app.lib.get import getPackage
 from app.lib.rebuild import BaseRebuilder, DebianRebuilder, QubesRebuilderDEB, getRebuilder
 
+TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
+
 
 def test_rebuild_debian():
     rebuilder = getRebuilder("bullseye")
@@ -35,7 +37,7 @@ def _create_rebuild(mock_run, basedir, package, return_code, stdout):
     def gen_temp_dir(*args, **lwargs):
         return f"{basedir}/build"
     os.makedirs(f"{basedir}/build")
-    shutil.copy2(f"data/{os.path.basename(package.buildinfos['old'])}", f"{basedir}/build")
+    shutil.copy2(f"{TEST_DIR}/data/{os.path.basename(package.buildinfos['old'])}", f"{basedir}/build")
 
     BaseRebuilder.gen_temp_dir = gen_temp_dir
     rebuilder = getRebuilder(package.distribution, artifacts_dir=f"{basedir}/artifacts")
