@@ -27,7 +27,7 @@ import shutil
 
 from app.celery import app
 from app.lib.log import log
-from app.config.config import Config
+from app.config import Config
 from app.lib.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet

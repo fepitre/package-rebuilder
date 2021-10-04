@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from app.config.config import Config
+from app.config import Config
 from app.tasks.rebuilder import get, _generate_results, _metadata_to_db
 
 # print("Generate DB results...")

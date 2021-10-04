@@ -19,7 +19,7 @@
 #
 
 import celery
-from app.config.config import Config
+from app.config import Config
 from app.lib.log import log
 
 app = celery.Celery("PackageRebuilder")

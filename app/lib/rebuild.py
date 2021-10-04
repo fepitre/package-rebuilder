@@ -25,7 +25,7 @@ import time
 import tempfile
 import glob
 
-from app.config.config import Config
+from app.config import Config
 from app.lib.common import is_qubes, is_debian, is_fedora
 from app.lib.exceptions import RebuilderExceptionBuild
 

@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 from jinja2 import Template
 
-from app.config.config import Config
+from app.config import Config
 from app.lib.exceptions import RebuilderException
 from app.lib.get import RebuilderDist, getPackage
 from app.lib.tool import get_rebuild_packages, get_celery_active_tasks
