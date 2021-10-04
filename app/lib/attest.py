@@ -35,6 +35,7 @@ except ImportError:
     debian = None
 
 from app.lib.exceptions import RebuilderExceptionAttest
+from app.lib.log import log
 from app.lib.rebuild import getRebuilder
 
 
@@ -73,9 +74,12 @@ class BaseAttester:
         if not self.keyid:
             raise RebuilderExceptionAttest("No GPG key id provided for metadata generation!")
         links = glob.glob(f"{output}/rebuild.{self.keyid[:8].lower()}.*.link")
+        if links:
+            log.debug(f"in-toto: {output}: multiple arch links detected")
         final_link = {}
         try:
             for link in links:
+                log.debug(f"in-toto: {output}: merging link {os.path.basename(link)}")
                 with open(link, 'r') as fd:
                     parsed_link = json.loads(fd.read())
                 if not final_link:
