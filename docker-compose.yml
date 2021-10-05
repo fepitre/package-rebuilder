@@ -123,9 +123,9 @@ services:
     # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
   # This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
-  #    deploy:
-  #      mode: replicated
-  #      replicas: 2
+    deploy:
+      mode: replicated
+      replicas: 0
 
   attester:
     restart: always
