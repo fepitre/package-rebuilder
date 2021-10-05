@@ -246,7 +246,8 @@ def report(package):
     output_dir = f"/var/lib/rebuilder/rebuild/{builder.project}"
 
     # fixme: temporary fixup until all paths are migrated
-    if package.buildinfos["new"].startswith('/artifacts'):
+    if isinstance(package.buildinfos, dict) and \
+            package.buildinfos.get("new", "").startswith('/artifacts'):
         package.buildinfos["new"] = f"/var/lib/rebuilder{package.buildinfos['new']}"
     if package.log.startswith('/artifacts'):
         package.log = f"/var/lib/rebuilder{package.log}"
