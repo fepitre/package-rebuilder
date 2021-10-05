@@ -53,7 +53,7 @@ HTML_TEMPLATE = Template("""<!DOCTYPE html>
             <table>
             {%- for s, packages in status.items() %}
                 {%- for pkg in packages %}
-                    <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log'].replace('/rebuild', '')}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
+                    <tr><td>{{pkg['name']}}-{{pkg['version']}}</td><td align="center"><a href="{{pkg['log']}}"><img src="{{pkg['badge']}}" alt="{{pkg['status']}}"/></a></td></tr>
                 {%- endfor %}
                 {{ '<tr><td></td><td></td></tr>' if not loop.last }}
             {%- endfor %}
@@ -138,7 +138,7 @@ def generate_results(app, project):
                         if isinstance(p, dict)]
     try:
         results = {}
-        results_path = f"/var/lib/rebuild/rebuild/{project}/results"
+        results_path = f"/var/lib/rebuilder/rebuild/{project}/results"
         os.makedirs(results_path, exist_ok=True)
         for dist in Config["project"][project]["dist"]:
             dist = RebuilderDist(dist)
@@ -170,6 +170,8 @@ def generate_results(app, project):
                         pkg = rebuild_results[str(package)]
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             pkg["badge"] = BADGES[pkg.status]
+                            pkg.log.replace("/var/lib/rebuilder/rebuild", "")
+                            pkg.log.replace("/rebuild", "")
                             result[pkg.status].append(pkg.to_dict())
                     else:
                         pkg = package
@@ -205,13 +207,13 @@ def generate_results(app, project):
             for ps in results[dist][sum_arches].keys():
                 generate_plots(results[dist][sum_arches][ps], dist, ps, sum_arches, results_path)
                 plots[ps] = f"{dist}_{ps}.{sum_arches}.png"
-            data = {
-                "dist": f"{project} {dist} ({sum_arches})",
-                "results": results[dist][sum_arches],
-                "plots": plots
-            }
-            with open(f"{results_path}/{dist}.{sum_arches}.html", 'w') as fd:
-                fd.write(HTML_TEMPLATE.render(**data))
+            # data = {
+            #     "dist": f"{project} {dist} ({sum_arches})",
+            #     "results": results[dist][sum_arches],
+            #     "plots": plots
+            # }
+            # with open(f"{results_path}/{dist}.{sum_arches}.html", 'w') as fd:
+            #     fd.write(HTML_TEMPLATE.render(**data))
 
         with open(f"{results_path}/{project}.json", "w") as fd:
             fd.write(json.dumps(results))
