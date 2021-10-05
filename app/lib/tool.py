@@ -63,6 +63,8 @@ def metadata_to_db(app, dist):
             "metadata": global_metadata
         })
         package.log = get_latest_log_file(package)
+        if package.status == "unreproducible":
+            package.diffoscope = get_latest_diffoscope_file(package)
         if not stored_packages.get(str(package), None):
             result.append(dict(package))
     return result
