@@ -74,7 +74,7 @@ class BaseAttester:
         if not self.keyid:
             raise RebuilderExceptionAttest("No GPG key id provided for metadata generation!")
         links = glob.glob(f"{output}/rebuild.{self.keyid[:8].lower()}.*.link")
-        if links:
+        if links and len(links) > 1:
             log.debug(f"in-toto: {output}: multiple arch links detected")
         final_link = {}
         try:
