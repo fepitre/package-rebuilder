@@ -335,11 +335,14 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
             # W: pay attention to latest "/", we use rsync!
             # W: this is relative path to /var/lib/rebuilder
             dir_to_upload = [
-                f"rebuild/{project}/logs/",
-                f"rebuild/{project}/buildinfos/",
-                f"rebuild/{project}/sources/",
-                f"rebuild/{project}/unreproducible/sources/",
+                f"rebuild/{project}/"
             ]
+            # dir_to_upload = [
+            #     f"rebuild/{project}/logs/",
+            #     f"rebuild/{project}/buildinfos/",
+            #     f"rebuild/{project}/sources/",
+            #     f"rebuild/{project}/unreproducible/sources/",
+            # ]
             # if upload_all:
             #     dir_to_upload += [
             #         f"rebuild/{project}/",
@@ -355,8 +358,8 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
             #             package, unreproducible=True
             #         )
             #         dir_to_upload.append(f"{metadata_path_unrepr}/")
-            if upload_results:
-                dir_to_upload.append(f"rebuild/{project}/results/")
+            # if upload_results:
+            #     dir_to_upload.append(f"rebuild/{project}/results/")
             for local_dir in dir_to_upload:
                 # fixme: maybe ssh keyword is useless: someone could
                 #  serve a local mirror directly
