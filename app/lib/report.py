@@ -170,8 +170,23 @@ def generate_results(app, project):
                         pkg = rebuild_results[str(package)]
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             pkg["badge"] = BADGES[pkg.status]
-                            pkg.log.replace("/var/lib/rebuilder/rebuild/", "/")
-                            pkg.log.replace("/rebuild/", "/")
+                            # fixme: temporary fixup
+                            pkg.log = pkg.log.replace("/var/lib/rebuilder/rebuild/", "/")\
+                                .replace("/rebuild/", "/")
+                            if pkg.diffoscope:
+                                pkg.diffoscope = pkg.diffoscope.\
+                                    replace("/var/lib/rebuilder/rebuild/", "/").\
+                                    replace("/rebuild/", "/")
+                            if pkg.metadata and pkg.metadata.get("reproducible", None):
+                                pkg.metadata["reproducible"] = \
+                                    pkg.metadata["reproducible"].replace(
+                                    "/var/lib/rebuilder/rebuild/", "/").replace(
+                                    "/rebuild/", "/")
+                            if pkg.metadata and pkg.metadata.get("unreproducible", None):
+                                pkg.metadata["unreproducible"] = \
+                                    pkg.metadata["unreproducible"].replace(
+                                    "/var/lib/rebuilder/rebuild/", "/").replace(
+                                    "/rebuild/", "/")
                             result[pkg.status].append(pkg.to_dict())
                     else:
                         pkg = package
