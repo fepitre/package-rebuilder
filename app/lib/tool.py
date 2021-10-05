@@ -25,7 +25,7 @@ def metadata_to_db(app, dist):
     unrepr_basedir = attester.metadata_dir(distribution, reproducible=False)
     if not os.path.exists(repr_basedir) and not unrepr_basedir:
         return result
-    buildinfo_files = glob.glob(f"/rebuild/{dist.project}/buildinfos/*.buildinfo")
+    buildinfo_files = glob.glob(f"/var/lib/rebuilder/rebuild/{dist.project}/buildinfos/*.buildinfo")
     for buildinfo in buildinfo_files:
         parsed_bn = parse_deb_buildinfo_fname(buildinfo)
         name = parsed_bn["name"]
@@ -105,7 +105,7 @@ def get_rebuild_packages(app, status=None, with_id=False):
 
 def get_latest_log_file(package):
     builder = getRebuilder(package.distribution)
-    output_dir = f"/rebuild/{builder.project}"
+    output_dir = f"/var/lib/rebuilder/rebuild/{builder.project}"
     pkg_log_files = glob.glob(f"{output_dir}/logs/{package}-*.log")
     pkg_log_files = sorted([f for f in pkg_log_files], reverse=True)
     return pkg_log_files[0] if pkg_log_files else ""

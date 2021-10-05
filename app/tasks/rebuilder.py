@@ -42,7 +42,7 @@ from app.lib.report import generate_results
 # fixme: improve serialize/deserialize Package
 
 class BaseTask(celery.Task):
-    autoretry_for = (RebuilderExceptionBuild, RebuilderExceptionAttest,)
+    autoretry_for = (RebuilderExceptionBuild, RebuilderExceptionReport, RebuilderExceptionAttest,)
     throws = (RebuilderException,)
     max_retries = Config["celery"]["max_retries"]
     # Let snapshot service to get the latest data from official repositories
@@ -177,6 +177,10 @@ def attest(package):
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
 
+    # fixme: temporary fixup until all paths are migrated
+    if package.artifacts.startswith('/artifacts'):
+        package.artifacts = f"/var/lib/rebuilder{package.artifacts}"
+
     project = get_project(package.distribution)
     if not project:
         raise RebuilderExceptionAttest(f"Cannot determine underlying project for {package}")
@@ -237,7 +241,15 @@ def report(package):
         raise RebuilderExceptionReport from e
 
     builder = getRebuilder(package.distribution)
-    output_dir = f"/rebuild/{builder.project}"
+    output_dir = f"/var/lib/rebuilder/rebuild/{builder.project}"
+
+    # fixme: temporary fixup until all paths are migrated
+    if package.buildinfos["new"].startswith('/artifacts'):
+        package.buildinfos["new"] = f"/var/lib/rebuilder{package.buildinfos['new']}"
+    if package.log.startswith('/artifacts'):
+        package.log = f"/var/lib/rebuilder{package.log}"
+    if package.artifacts.startswith('/artifacts'):
+        package.artifacts = f"/var/lib/rebuilder{package.artifacts}"
 
     # collect log
     log_dir = f"{output_dir}/logs"
@@ -317,7 +329,8 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
 
     try:
         if ssh_key and remote_ssh_host and remote_ssh_basedir:
-            # pay attention to latest "/", we use rsync!
+            # W: pay attention to latest "/", we use rsync!
+            # W: this is relative path to /var/lib/rebuilder
             dir_to_upload = [
                 f"/rebuild/{project}/logs/",
                 f"/rebuild/{project}/buildinfos/",
@@ -359,7 +372,7 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
                 cmd = [
                     "rsync", "-av", "--progress", "-e",
                     f"ssh -i /root/.ssh/{ssh_key} -o StrictHostKeyChecking=no",
-                    local_dir, remote_path
+                    f"/var/lib/rebuilder/{local_dir}", remote_path
                 ]
                 subprocess.run(cmd, check=True)
         else:
