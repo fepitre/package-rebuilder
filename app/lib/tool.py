@@ -93,7 +93,7 @@ def get_rebuild_packages(app, status=None, with_id=False):
                 parsed_packages.append(package)
     # create dict to help into getting package info faster
     for p in sorted(parsed_packages, key=lambda x: str(x)):
-        if failed_packages.get(str(p), None):
+        if failed_packages.get(str(p), None) and p.status not in ("reproducible", "unreproducible"):
             p.log = failed_packages[str(p)].log
             p.retries = failed_packages[str(p)].retries
         rebuilt_packages[str(p)] = p
