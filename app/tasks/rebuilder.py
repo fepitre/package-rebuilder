@@ -178,6 +178,8 @@ def attest(package):
         raise RebuilderExceptionAttest from e
 
     # fixme: temporary fixup until all paths are migrated
+    if package.buildinfos["new"].startswith('/artifacts'):
+        package.buildinfos["new"] = f"/var/lib/rebuilder{package.buildinfos['new']}"
     if package.artifacts.startswith('/artifacts'):
         package.artifacts = f"/var/lib/rebuilder{package.artifacts}"
 
