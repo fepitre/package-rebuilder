@@ -2,7 +2,7 @@ version: '3'
 
 services:
 
-### rebuilder_base
+  ### rebuilder_base
 
   base:
     image: rebuilder_base
@@ -10,17 +10,17 @@ services:
       context: .
       dockerfile: Dockerfile
 
-### Celery
+  ### Celery
 
   broker:
     restart: always
     image: 'docker.io/redis'
     ports:
-     - '6379:6379'
+      - '6379:6379'
 
   backend:
     restart: always
-# 'docker.io/mongo'
+    # 'docker.io/mongo'
     image: 'docker.io/mongo:4.4.8'
     ports:
       - '27017:27017'
@@ -40,7 +40,7 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
       - CELERY_RESULT_BACKEND=mongodb://backend:27017
-# https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
+    # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker -B -s /tmp/celerybeat-schedule --loglevel=INFO
 
   flower:
@@ -52,7 +52,7 @@ services:
     ports:
       - 5556:5556
 
-# This is for monitoring easier Redis with a web interface
+  # This is for monitoring easier Redis with a web interface
   phpredisadmin:
     restart: always
     image: 'erikdubbelboer/phpredisadmin'
@@ -61,19 +61,33 @@ services:
     links:
       - broker
     ports:
-     - '8080:80'
+      - '8080:80'
     environment:
       - REDIS_1_HOST=broker
       - REDIS_1_NAME=broker
 
-### PackageRebuilder
+  # This is for monitoring easier MongoDB with a web interface
+  mongo-express:
+    restart: always
+    image: 'docker.io/mongo-express'
+    depends_on:
+      - backend
+    links:
+      - backend
+    ports:
+      - '8081:8081'
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://backend:27017
+
+
+  ### PackageRebuilder
 
   getter:
     restart: always
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# uploader worker needs in-toto directory for checking if metadata exists
+      # uploader worker needs in-toto directory for checking if metadata exists
       - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
     depends_on:
       - broker
@@ -84,7 +98,7 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
       - CELERY_RESULT_BACKEND=mongodb://backend:27017
-# https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
+    # https://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html?highlight=periodic#starting-the-scheduler
     entrypoint: celery -A app worker --loglevel=INFO -O fair --prefetch-multiplier 1 -c 1 --queues=get
 
   rebuilder:
@@ -95,7 +109,7 @@ services:
       dockerfile: rebuilder.Dockerfile
     volumes:
       - .:/app
-# rebuilder worker(s) need(s) artifacts directory
+      # rebuilder worker(s) need(s) artifacts directory
       - '/var/lib/rebuilder/artifacts:/var/lib/rebuilder/artifacts'
     depends_on:
       - broker
@@ -106,12 +120,12 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
       - CELERY_RESULT_BACKEND=mongodb://backend:27017
-# https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
+    # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=rebuild
-# This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
-#    deploy:
-#      mode: replicated
-#      replicas: 2
+  # This is for specifing the number of rebuilder worker. Alternatively, you can use: docker-compose scale rebuilder=X
+  #    deploy:
+  #      mode: replicated
+  #      replicas: 2
 
   attester:
     restart: always
@@ -121,7 +135,7 @@ services:
       dockerfile: rebuilder.Dockerfile
     volumes:
       - .:/app
-# attester need artifacts directory, in-toto repository and GPG for signing in-toto metadata
+      # attester need artifacts directory, in-toto repository and GPG for signing in-toto metadata
       - '/var/lib/rebuilder/artifacts:/var/lib/rebuilder/artifacts'
       - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
       - '/var/lib/rebuilder/gnupg:/root/.gnupg'
@@ -134,7 +148,7 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://broker:6379/0
       - CELERY_RESULT_BACKEND=mongodb://backend:27017
-# https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
+    # https://docs.celeryproject.org/en/stable/reference/cli.html#cmdoption-celery-worker-c
     entrypoint: celery -A app worker --loglevel=INFO  -O fair --prefetch-multiplier 1 -c 1 --queues=attest
 
   reporter:
@@ -142,7 +156,7 @@ services:
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# reporter worker needs artifacts, and in-toto directory
+      # reporter worker needs artifacts, and in-toto directory
       - '/var/lib/rebuilder/artifacts:/var/lib/rebuilder/artifacts'
       - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
     depends_on:
@@ -161,7 +175,7 @@ services:
     image: 'rebuilder_base'
     volumes:
       - .:/app
-# uploader worker needs in-toto directory and SSH key for rsyncing on remote location
+      # uploader worker needs in-toto directory and SSH key for rsyncing on remote location
       - '/var/lib/rebuilder/rebuild:/var/lib/rebuilder/rebuild'
       - '/var/lib/rebuilder/ssh:/root/.ssh'
     depends_on:
