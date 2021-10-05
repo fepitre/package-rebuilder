@@ -170,8 +170,8 @@ def generate_results(app, project):
                         pkg = rebuild_results[str(package)]
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             pkg["badge"] = BADGES[pkg.status]
-                            pkg.log.replace("/var/lib/rebuilder/rebuild", "")
-                            pkg.log.replace("/rebuild", "")
+                            pkg.log.replace("/var/lib/rebuilder/rebuild/", "/")
+                            pkg.log.replace("/rebuild/", "/")
                             result[pkg.status].append(pkg.to_dict())
                     else:
                         pkg = package
