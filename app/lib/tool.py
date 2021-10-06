@@ -9,7 +9,7 @@ from app.lib.get import getPackage
 from app.lib.rebuild import getRebuilder
 
 
-def metadata_to_db(app, dist):
+def metadata_to_db(app, dist, **kwargs):
     result = []
     # get previous triggered packages builds
     stored_packages = get_rebuild_packages(app)
@@ -25,7 +25,8 @@ def metadata_to_db(app, dist):
     unrepr_basedir = attester.metadata_dir(distribution, reproducible=False)
     if not os.path.exists(repr_basedir) and not unrepr_basedir:
         return result
-    buildinfo_files = glob.glob(f"/var/lib/rebuilder/rebuild/{dist.project}/buildinfos/*.buildinfo")
+    rebuild_dir = kwargs.get("rebuild_dir", "/var/lib/rebuilder/rebuild")
+    buildinfo_files = glob.glob(f"{rebuild_dir}/{dist.project}/buildinfos/*.buildinfo")
     for buildinfo in buildinfo_files:
         parsed_bn = parse_deb_buildinfo_fname(buildinfo)
         name = parsed_bn["name"]
@@ -105,9 +106,9 @@ def get_rebuild_packages(app, status=None, with_id=False):
 # TODO: convert and refactor below functions into client to be used notably for creating a BASH cli
 
 
-def get_latest_log_file(package):
+def get_latest_log_file(package, rebuild_dir="/var/lib/rebuilder/rebuild"):
     builder = getRebuilder(package.distribution)
-    output_dir = f"/var/lib/rebuilder/rebuild/{builder.project}"
+    output_dir = f"{rebuild_dir}/{builder.project}"
     pkg_log_files = glob.glob(f"{output_dir}/logs/{package}-*.log")
     pkg_log_files = sorted([f for f in pkg_log_files], reverse=True)
     return pkg_log_files[0] if pkg_log_files else ""

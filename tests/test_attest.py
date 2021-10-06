@@ -12,6 +12,8 @@ TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 GPG_SIGN_KEY_ID = "632F8C69E01B25C9E0C3ADF2F360C0D259FB650C"
 GPG_SIGN_KEY_UNREPR_ID = "417490C2E134631C893D34F857D7E041A878DA99"
 
+os.environ["GNUPGHOME"] = f"{TEST_DIR}/gnupg"
+
 
 def test_attest_reproducible():
     with tempfile.TemporaryDirectory() as basedir:
@@ -23,15 +25,12 @@ def test_attest_reproducible():
             'distribution': 'bullseye',
             'buildinfos': {
                 "old": 'http://buildinfos.fake.net/0/0xffff/0xffff_0.8-1+b1_amd64.buildinfo',
-                "new": f"{basedir}/0xffff_0.8-1+b1_amd64.buildinfo"
+                "new": f"{basedir}/fake_0xffff_0.8-1+b1_amd64.buildinfo"
             }
         })
 
         shutil.copy2(f"{TEST_DIR}/data/0xffff_0.8-1+b1_amd64.deb", basedir)
-        shutil.copy2(f"{TEST_DIR}/data/0xffff_0.8-1+b1_amd64.buildinfo", basedir)
-
-        os.environ["GNUPGHOME"] = f"{basedir}/gnupg"
-        shutil.copytree(f"{TEST_DIR}/gnupg", f"{basedir}/gnupg")
+        shutil.copy2(f"{TEST_DIR}/data/fake_0xffff_0.8-1+b1_amd64.buildinfo", basedir)
 
         package.artifacts = basedir
         process_attestation(
@@ -51,9 +50,6 @@ def test_attest_reproducible():
 
 def test_attest_unreproducible():
     with tempfile.TemporaryDirectory() as basedir:
-        os.environ["GNUPGHOME"] = f"{basedir}/gnupg"
-        shutil.copytree(f"{TEST_DIR}/gnupg", f"{basedir}/gnupg")
-
         # amd64
         package = getPackage({
             'name': 'bash',
@@ -63,13 +59,13 @@ def test_attest_unreproducible():
             'distribution': 'bullseye',
             'buildinfos': {
                 "old": 'http://buildinfos.fake.net/b/bash/bash_5.1-2+b3_amd64.buildinfo',
-                "new": f"{basedir}/bash_5.1-2+b3_amd64.buildinfo"
+                "new": f"{basedir}/fake_bash_5.1-2+b3_amd64.buildinfo"
             },
             "artifacts": basedir
         })
         shutil.copy2(f"{TEST_DIR}/data/bash_5.1-2+b3_amd64.deb", basedir)
         shutil.copy2(f"{TEST_DIR}/data/bash-static_5.1-2+b3_amd64.deb", basedir)
-        shutil.copy2(f"{TEST_DIR}/data/bash_5.1-2+b3_amd64.buildinfo", basedir)
+        shutil.copy2(f"{TEST_DIR}/data/fake_bash_5.1-2+b3_amd64.buildinfo", basedir)
 
         package.artifacts = basedir
         process_attestation(
@@ -119,12 +115,12 @@ def test_attest_unreproducible():
             'distribution': 'bullseye',
             'buildinfos': {
                 "old": 'http://buildinfos.fake.net/b/bash/bash_5.1-2+b3_all.buildinfo',
-                "new": f"{basedir}/bash_5.1-2+b3_all.buildinfo"
+                "new": f"{basedir}/fake_bash_5.1-2+b3_all.buildinfo"
             }
         })
 
         shutil.copy2(f"{TEST_DIR}/data/bash-doc_5.1-2+b3_all.deb", basedir)
-        shutil.copy2(f"{TEST_DIR}/data/bash_5.1-2+b3_all.buildinfo", basedir)
+        shutil.copy2(f"{TEST_DIR}/data/fake_bash_5.1-2+b3_all.buildinfo", basedir)
 
         package.artifacts = basedir
         process_attestation(

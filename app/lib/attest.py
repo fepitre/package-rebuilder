@@ -42,6 +42,7 @@ from app.lib.rebuild import getRebuilder
 class BaseAttester:
     def __init__(self, **kwargs):
         self.keyid = kwargs.get("keyid", None)
+        self.gnupghome = kwargs.get("gnupghome", None)
         self.rebuild_dir = kwargs.get("rebuild_dir", "/var/lib/rebuilder/rebuild")
 
     def metadata_dir(self, distribution, reproducible):
@@ -60,11 +61,13 @@ class BaseAttester:
         if not filenames:
             raise RebuilderExceptionAttest(f"No files provided for in-toto metadata generation!")
         output = tempfile.mkdtemp(dir=artifacts)
-        cmd = ["in-toto-run", f"--step-name=rebuild", "--no-command", "--products"] + filenames
+        cmd = ["in-toto-run", "--step-name=rebuild", "--no-command", "--products"] + filenames
         cmd += ["--gpg", self.keyid, "--metadata-directory", output]
+        if self.gnupghome:
+            cmd += ["--gpg-home", self.gnupghome]
         try:
             os.makedirs(output, exist_ok=True)
-            subprocess.run(cmd, cwd=artifacts, check=True)
+            result = subprocess.run(cmd, cwd=artifacts, check=True)
             return output
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             raise RebuilderExceptionAttest(f"in-toto metadata generation failed: {str(e)}")

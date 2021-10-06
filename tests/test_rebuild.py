@@ -37,7 +37,9 @@ def _create_rebuild(mock_run, basedir, package, return_code, stdout):
     def gen_temp_dir(*args, **lwargs):
         return f"{basedir}/build"
     os.makedirs(f"{basedir}/build")
-    shutil.copy2(f"{TEST_DIR}/data/{os.path.basename(package.buildinfos['old'])}", f"{basedir}/build")
+    buildinfo_name = os.path.basename(package.buildinfos['old'])
+    shutil.copy2(f"{TEST_DIR}/data/{buildinfo_name}",
+                 f"{basedir}/build/{buildinfo_name.replace('fake_', '')}")
 
     BaseRebuilder.gen_temp_dir = gen_temp_dir
     rebuilder = getRebuilder(package.distribution, artifacts_dir=f"{basedir}/artifacts")
@@ -55,7 +57,7 @@ def test_rebuild_debian_reproducible(mock_run):
         'distribution': 'bullseye',
         'buildinfos': {
             "old": 'https://buildinfos.debian.net/buildinfo-pool'
-                   '/0/0xffff/0xffff_0.8-1+b1_amd64.buildinfo'
+                   '/0/0xffff/fake_0xffff_0.8-1+b1_amd64.buildinfo'
         }
     })
     stdout = b"Build is reproducible!"
@@ -79,7 +81,7 @@ def test_rebuild_debian_unreproducible(mock_run):
         'distribution': 'bullseye',
         'buildinfos': {
             "old": 'https://buildinfos.debian.net/buildinfo-pool'
-                   '/b/bash/bash_5.1-2+b3_amd64.buildinfo'
+                   '/b/bash/fake_bash_5.1-2+b3_amd64.buildinfo'
         }
     })
     stdout = b"Build is unreproducible!"
@@ -103,7 +105,7 @@ def test_rebuild_debian_failure(mock_run):
         'distribution': 'bullseye',
         'buildinfos': {
             "old": 'https://buildinfos.debian.net/buildinfo-pool'
-                   '/b/bash/bash_5.1-2+b3_amd64.buildinfo'
+                   '/b/bash/fake_bash_5.1-2+b3_amd64.buildinfo'
         }
     })
     stdout = b"Build failed!"

@@ -93,7 +93,7 @@ def test_repo_debian(requests_mock):
     expected_packages_in_test = [
         DebianPackage(name="apt", version="2.3.9", arch="amd64", epoch=None,
                       distribution="unstable", buildinfos={"old": ""}),
-        DebianPackage(name="bash", version="5.1-3+b1", arch="amd64", epoch=None,
+        DebianPackage(name="bash", version="5.1-2+b3", arch="amd64", epoch=None,
                       distribution="unstable", buildinfos={"old": ""}),
         DebianPackage(name="coreutils", version="8.32-4+b1", arch="amd64", epoch=None,
                       distribution="unstable", buildinfos={"old": ""}),

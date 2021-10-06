@@ -2,14 +2,11 @@ variables:
   DEBUG: "1"
 
 .test_job:
-  image: debian:stable
+  image: docker/compose:latest
+  services:
+    - docker:dind
   tags:
     - docker
-  before_script:
-    - apt update -y && apt -y upgrade && apt install -y git in-toto python3-pip python3-requests
-      python3-apt python3-debian python3-dateutil python3-setuptools python3-rstr python3-httpx python3-tenacity
-      python3-requests-mock python3-pytest python3-pytest-mock python3-pytest-cov
-    - pip3 install -U python-debian
 
 tests:
   extends: .test_job
@@ -20,6 +17,5 @@ tests:
       junit: artifacts/app.xml
       cobertura: artifacts/coverage.xml
   coverage: '/TOTAL.*\s(\d+)%/'
-  script: PYTHONPATH=. pytest-3 -v --color=yes --log-cli-level=DEBUG
-    --cov app --cov-report term --cov-report html:artifacts/htmlcov --cov-report xml:artifacts/coverage.xml
-    --junitxml=artifacts/app.xml tests/test_*.py
+  script:
+    - docker-compose -f tests/docker-compose.yml up

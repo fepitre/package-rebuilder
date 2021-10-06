@@ -125,7 +125,7 @@ class FedoraRepository:
 
 
 class DebianRepository:
-    def __init__(self, distribution, arch, package_sets):
+    def __init__(self, distribution, arch, package_sets, **kwargs):
         self.distribution = distribution
         self.arch = DEBIAN_ARCHES.get(arch, arch)
         self.package_sets = package_sets
@@ -140,10 +140,14 @@ class DebianRepository:
         except (ValueError, FileNotFoundError) as e:
             raise RebuilderExceptionGet(f"Failed to sync repository: {str(e)}")
 
+        self.package_sets_baseurl = kwargs.get(
+            "package_sets_baseurl", f"https://jenkins.debian.net/userContent/reproducible/"
+                                    f"debian/pkg-sets/{self.distribution}")
+        self.buildinfos_baseurl = kwargs.get("buildinfos_baseurl", "https://buildinfos.debian.net")
+
     def get_package_names_in_debian_set(self, pkgset_name):
         packages = []
-        url = f"https://jenkins.debian.net/userContent/reproducible/" \
-              f"debian/pkg-sets/{self.distribution}/{pkgset_name}.pkgset"
+        url = f"{self.package_sets_baseurl}/{pkgset_name}.pkgset"
         try:
             resp = requests.get(url)
             if resp.ok:
@@ -155,7 +159,7 @@ class DebianRepository:
 
     def get_buildinfo_files(self):
         files = []
-        url = f"https://buildinfos.debian.net/buildinfo-pool_{self.distribution}_{self.arch}.list"
+        url = f"{self.buildinfos_baseurl}/buildinfo-pool_{self.distribution}_{self.arch}.list"
         try:
             resp = requests.get(url)
             if not resp.ok:
@@ -165,7 +169,7 @@ class DebianRepository:
 
         buildinfo_pool = resp.text.rstrip('\n').split('\n')
         for buildinfo in buildinfo_pool:
-            files.append(f"https://buildinfos.debian.net{buildinfo}")
+            files.append(f"{self.buildinfos_baseurl}{buildinfo}")
         return files
 
     def get_packages(self):

@@ -51,9 +51,9 @@ config.read(config_path)
 
 Config = {
     "celery": {
-        "broker": config.get("common", "broker", fallback=DEFAULT_CONFIG["broker"]),
-        "backend": config.get("common", "backend", fallback=DEFAULT_CONFIG["backend"]),
-        "max_retries": config.get("common", "max_retries", fallback=DEFAULT_CONFIG["max_retries"]),
+        "broker": config.get("celery", "broker", fallback=DEFAULT_CONFIG["broker"]),
+        "backend": config.get("celery", "backend", fallback=DEFAULT_CONFIG["backend"]),
+        "max_retries": config.get("celery", "max_retries", fallback=DEFAULT_CONFIG["max_retries"]),
     },
     "common": {
         "schedule_get": config.get("common", "schedule_get", fallback=DEFAULT_CONFIG["schedule_get"]),

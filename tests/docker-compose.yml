@@ -1,0 +1,45 @@
+version: '3'
+
+services:
+
+  base:
+    image: rebuilder_base
+    build:
+      context: ..
+      dockerfile: Dockerfile
+
+  broker:
+    restart: always
+    image: 'docker.io/redis'
+    ports:
+      - '6379:6379'
+
+  backend:
+    restart: always
+    image: 'docker.io/mongo:4.4.8'
+    ports:
+      - '27017:27017'
+    command: --quiet
+
+  test:
+    restart: always
+    build:
+      context: ..
+      dockerfile: ci.Dockerfile
+    privileged: true
+    depends_on:
+      - broker
+      - backend
+    links:
+      - broker
+      - backend
+    volumes:
+      - ..:/app
+    environment:
+      - CELERY_BROKER_URL=redis://broker:6379/0
+      - CELERY_RESULT_BACKEND=mongodb://backend:27017
+      - GNUPGHOME=tests/gnupg
+      - PACKAGE_REBUILDER_CONF=tests/rebuilder.conf
+      - PYTHONPATH=/app
+    command: pytest-3 -v --color=yes --cov app --cov-report term --cov-report html:artifacts/htmlcov --cov-report xml:/artifacts/coverage.xml --junitxml=artifacts/app.xml tests/
+#--log-cli-level=DEBUG

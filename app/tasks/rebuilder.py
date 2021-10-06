@@ -108,7 +108,7 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 @app.task(base=BaseTask)
-def get(dist, force_retry=False):
+def get(dist, **kwargs):
     result = {}
     if dist in get_celery_queued_tasks(app, "get"):
         log.debug(f"{dist}: already submitted. Skipping.")
@@ -134,7 +134,7 @@ def get(dist, force_retry=False):
                         log.debug(f"{package}: already built ({stored_package.status}). Skipping")
                         continue
                     if stored_package.status == "failure":
-                        if not force_retry:
+                        if not kwargs.get("force_retry", None):
                             log.debug(f"{package}: already built ({stored_package.status}). Skipping")
                             continue
                     if stored_package.status == "retry":
@@ -157,31 +157,25 @@ def get(dist, force_retry=False):
 
 
 @app.task(base=RebuildTask)
-def rebuild(package):
+def rebuild(package, **kwargs):
     try:
         package = getPackage(package)
     except Exception as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionBuild from e
-    builder = getRebuilder(package.distribution)
+    builder = getRebuilder(package.distribution, **kwargs)
     package = builder.run(package=package)
     result = {"rebuild": [dict(package)]}
     return result
 
 
 @app.task(base=BaseTask)
-def attest(package):
+def attest(package, **kwargs):
     try:
         package = getPackage(package)
     except Exception as e:
         log.error("Failed to parse package.")
         raise RebuilderExceptionAttest from e
-
-    # fixme: temporary fixup until all paths are migrated
-    if package.buildinfos["new"].startswith('/artifacts'):
-        package.buildinfos["new"] = f"/var/lib/rebuilder{package.buildinfos['new']}"
-    if package.artifacts.startswith('/artifacts'):
-        package.artifacts = f"/var/lib/rebuilder{package.artifacts}"
 
     project = get_project(package.distribution)
     if not project:
@@ -211,20 +205,12 @@ def attest(package):
 
         # generate in-toto reproducible metadata
         if repr_files:
-            process_attestation(
-                package=package,
-                gpg_sign_keyid=gpg_sign_keyid,
-                files=repr_files,
-                reproducible=True,
-            )
+            process_attestation(package=package, gpg_sign_keyid=gpg_sign_keyid, files=repr_files,
+                                reproducible=True, **kwargs)
         # generate in-toto unreproducible metadata
         if unrepr_files:
-            process_attestation(
-                package=package,
-                gpg_sign_keyid=gpg_sign_keyid_unreproducible,
-                files=unrepr_files,
-                reproducible=False,
-            )
+            process_attestation(package=package, gpg_sign_keyid=gpg_sign_keyid_unreproducible,
+                                files=unrepr_files, reproducible=False, **kwargs)
     else:
         log.info(f"Unable to sign in-toto reproducible/unreproducible metadata: "
                  f"no GPG keyid provided for project '{project}.")
@@ -235,7 +221,7 @@ def attest(package):
 
 
 @app.task(base=BaseTask)
-def report(package):
+def report(package, **kwargs):
     try:
         package = getPackage(package)
     except Exception as e:
@@ -243,16 +229,8 @@ def report(package):
         raise RebuilderExceptionReport from e
 
     builder = getRebuilder(package.distribution)
-    output_dir = f"/var/lib/rebuilder/rebuild/{builder.project}"
-
-    # fixme: temporary fixup until all paths are migrated
-    if isinstance(package.buildinfos, dict) and \
-            package.buildinfos.get("new", "").startswith('/artifacts'):
-        package.buildinfos["new"] = f"/var/lib/rebuilder{package.buildinfos['new']}"
-    if package.log.startswith('/artifacts'):
-        package.log = f"/var/lib/rebuilder{package.log}"
-    if package.artifacts.startswith('/artifacts'):
-        package.artifacts = f"/var/lib/rebuilder{package.artifacts}"
+    rebuild_dir = kwargs.get("rebuild_dir", "/var/lib/rebuilder/rebuild")
+    output_dir = f"{rebuild_dir}/{builder.project}"
 
     # collect log
     log_dir = f"{output_dir}/logs"
