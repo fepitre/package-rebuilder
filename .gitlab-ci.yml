@@ -18,4 +18,5 @@ tests:
       cobertura: artifacts/coverage.xml
   coverage: '/TOTAL.*\s(\d+)%/'
   script:
+    - docker-compose -f tests/docker-compose.yml build base test
     - docker-compose -f tests/docker-compose.yml run test
