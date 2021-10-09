@@ -34,6 +34,8 @@ try:
 except ImportError:
     debian = None
 
+from in_toto.runlib import in_toto_run
+
 from app.lib.exceptions import RebuilderExceptionAttest
 from app.lib.log import log
 from app.lib.rebuild import getRebuilder
@@ -61,15 +63,14 @@ class BaseAttester:
         if not filenames:
             raise RebuilderExceptionAttest(f"No files provided for in-toto metadata generation!")
         output = tempfile.mkdtemp(dir=artifacts)
-        cmd = ["in-toto-run", "--step-name=rebuild", "--no-command", "--products"] + filenames
-        cmd += ["--gpg", self.keyid, "--metadata-directory", output]
-        if self.gnupghome:
-            cmd += ["--gpg-home", self.gnupghome]
         try:
-            os.makedirs(output, exist_ok=True)
-            result = subprocess.run(cmd, cwd=artifacts, check=True)
+            os.chdir(artifacts)
+            in_toto_run(
+                name="rebuild", material_list=[], product_list=filenames, link_cmd_args=[],
+                gpg_keyid=self.keyid, gpg_home=self.gnupghome, metadata_directory=output
+            )
             return output
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        except Exception as e:
             raise RebuilderExceptionAttest(f"in-toto metadata generation failed: {str(e)}")
 
     # fixme: improve merge as it does not support concurrent access
