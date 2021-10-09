@@ -33,7 +33,7 @@ from app.lib.exceptions import RebuilderException, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
 from app.lib.common import get_project
 from app.lib.get import getPackage, RebuilderDist
-from app.lib.tool import metadata_to_db, get_rebuild_packages, get_celery_queued_tasks
+from app.lib.tool import metadata_to_database, get_rebuild_packages, get_celery_queued_tasks
 from app.lib.rebuild import getRebuilder
 from app.lib.attest import process_attestation
 from app.lib.report import generate_results
@@ -62,6 +62,7 @@ class RebuildTask(BaseTask):
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         results, = exc.args
         package = results[0]
+        package["status"] = "failure"
         report.delay(package)
 
     def on_success(self, retval, task_id, args, kwargs):
@@ -85,7 +86,7 @@ def _metadata_to_db(dist):
     try:
         dist = RebuilderDist(dist)
         log.debug(f"Provisionning DB for {dist} data)")
-        for p in metadata_to_db(app, dist):
+        for p in metadata_to_database(app, dist):
             app.backend._store_result(
                 task_id=uuid.uuid4(),
                 result={"report": [p]},
@@ -120,7 +121,7 @@ def get(dist, **kwargs):
                 log.debug(f"No packages found for {dist}")
 
             # get previous triggered packages builds
-            stored_packages = get_rebuild_packages(app)
+            stored_packages = get_rebuild_packages(app, dist)
 
             # queued packages to be rebuilt
             rebuild_queued_tasks = get_celery_queued_tasks(app, "rebuild")

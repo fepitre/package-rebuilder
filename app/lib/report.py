@@ -20,15 +20,17 @@
 
 import os
 import json
+import hashlib
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 
 from jinja2 import Template
 
 from app.config import Config
-from app.lib.exceptions import RebuilderException
-from app.lib.get import RebuilderDist, getPackage
-from app.lib.tool import get_rebuild_packages, get_celery_active_tasks
+from app.lib.exceptions import RebuilderException, RebuilderExceptionReport
+from app.lib.get import Package, RebuilderDist, getPackage
+# from app.lib.tool import get_rebuild_packages, get_celery_active_tasks
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
@@ -132,7 +134,6 @@ def generate_plots(result, distribution, pkgset_name, arch, results_path):
 
 
 def generate_results(app, project):
-    rebuild_results = get_rebuild_packages(app)
     running_rebuilds = [getPackage(p)
                         for p in get_celery_active_tasks(app, "app.tasks.rebuilder.rebuild")
                         if isinstance(p, dict)]
@@ -142,6 +143,7 @@ def generate_results(app, project):
         os.makedirs(results_path, exist_ok=True)
         for dist in Config["project"][project]["dist"]:
             dist = RebuilderDist(dist)
+            rebuild_results = get_rebuild_packages(app, dist)
             results.setdefault(dist.distribution, {})
             results[dist.distribution].setdefault(dist.arch, {})
 
@@ -171,22 +173,22 @@ def generate_results(app, project):
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             pkg["badge"] = BADGES[pkg.status]
                             # fixme: temporary fixup
-                            pkg.log = pkg.log.replace("/var/lib/rebuilder/rebuild/", "/")\
+                            pkg.log = pkg.log.replace("/var/lib/rebuilder/rebuild/", "/") \
                                 .replace("/rebuild/", "/")
                             if pkg.diffoscope:
-                                pkg.diffoscope = pkg.diffoscope.\
-                                    replace("/var/lib/rebuilder/rebuild/", "/").\
+                                pkg.diffoscope = pkg.diffoscope. \
+                                    replace("/var/lib/rebuilder/rebuild/", "/"). \
                                     replace("/rebuild/", "/")
                             if pkg.metadata and pkg.metadata.get("reproducible", None):
                                 pkg.metadata["reproducible"] = \
                                     pkg.metadata["reproducible"].replace(
-                                    "/var/lib/rebuilder/rebuild/", "/").replace(
-                                    "/rebuild/", "/")
+                                        "/var/lib/rebuilder/rebuild/", "/").replace(
+                                        "/rebuild/", "/")
                             if pkg.metadata and pkg.metadata.get("unreproducible", None):
                                 pkg.metadata["unreproducible"] = \
                                     pkg.metadata["unreproducible"].replace(
-                                    "/var/lib/rebuilder/rebuild/", "/").replace(
-                                    "/rebuild/", "/")
+                                        "/var/lib/rebuilder/rebuild/", "/").replace(
+                                        "/rebuild/", "/")
                             result[pkg.status].append(pkg.to_dict())
                     else:
                         pkg = package
@@ -235,3 +237,116 @@ def generate_results(app, project):
 
     except Exception as e:
         raise RebuilderException(f"Failed to generate status: {str(e)}")
+
+
+class RebuilderDB:
+    def __init__(self, conn, project, **kwargs):
+        self.conn = conn
+        self.project = project
+        self.db = self.conn["rebuilder"]
+        self.collection = self.db[project]
+
+    @staticmethod
+    def _gen_id(patterns):
+        return hashlib.md5(''.join(patterns).encode()).hexdigest()
+
+    def _clear(self, col, do=False):
+        if do:
+            self.db[col].drop()
+
+    def _get(self, col, query):
+        results = []
+        collection = self.db[col]
+        queried_results = list(collection.find(query))
+        for result in queried_results:
+            results.append(result)
+        return results
+
+    def _insert(self, col, data, provided_id=None):
+        collection = self.db[col]
+        if provided_id:
+            data["_id"] = provided_id
+        inserted_id = collection.insert_one(data).inserted_id
+        return inserted_id
+
+    def _update(self, col, data, provided_id):
+        collection = self.db[col]
+        updated = collection.update_one({"_id": provided_id}, {"$set": data})
+        return provided_id, updated.modified_count == 0
+
+    def _delete(self, col, input_id):
+        collection = self.db[col]
+        deleted = collection.delete_one({"_id": input_id})
+        return deleted.deleted_count == 0
+
+    def _dump(self, col, limit=None, with_id=True):
+        collection = self.db[col]
+        cursor = collection.find()
+        data = list(cursor)
+        dumped_data = []
+        for num, doc in enumerate(data):
+            if not with_id:
+                del doc["_id"]
+            # doc["_id"] = str(doc["_id"])
+            dumped_data.append(doc)
+            if limit and limit == num:
+                break
+        return dumped_data
+
+    def _dump_to_json(self, col, limit=None, dst=None):
+        if not dst:
+            dst = f"rebuilderdb-dump-{time.time()}.json"
+        try:
+            with open(dst, 'w') as dst_fd:
+                dst_fd.write(json.dumps(self._dump(col=col, limit=limit)))
+        except Exception as e:
+            raise RebuilderExceptionReport from e
+
+    def _load(self, col, src):
+        collection = self.db[col]
+        with open(src, 'r') as src_fd:
+            data = json.loads(src_fd.read())
+        try:
+            collection.insert_many(data)
+        except Exception as e:
+            raise RebuilderExceptionReport from e
+
+    def dump_buildrecords(self, limit=None, with_id=False):
+        dump = self._dump(self.project, limit=limit, with_id=with_id)
+        parsed_dump = sorted([getPackage(p) for p in dump], key=lambda x: str(x))
+        return parsed_dump
+
+    def dump_buildrecords_to_json(self, limit=None, dst=None):
+        self._dump_to_json(self.project, limit=limit, dst=dst)
+
+    def dump_buildrecords_as_dict(self, limit=None, with_id=False):
+        return {str(p): p for p in self.dump_buildrecords(limit=limit, with_id=with_id)}
+
+    def insert_buildrecord(self, package):
+        buildrecord = dict(package)
+        buildrecord_id = self._insert(self.project, buildrecord, self._gen_id([str(package)]))
+        return buildrecord_id
+
+    def delete_buildrecord(self, package):
+        buildrecord_id = self._gen_id([str(package)])
+        return self._delete(self.project, buildrecord_id)
+
+    def get_buildrecord_by_id(self, buildrecord_id):
+        result = {}
+        queried_result = self._get(self.project, {"_id": buildrecord_id})
+        return queried_result[0] if queried_result else result
+
+    def get_buildrecord(self, package):
+        buildrecord_id = self._gen_id([str(package)])
+        buildrecord = self.get_buildrecord_by_id(buildrecord_id)
+        if buildrecord:
+            try:
+                del buildrecord["_id"]
+                buildrecord = Package.from_dict(buildrecord)
+            except KeyError as e:
+                raise RebuilderExceptionReport(str(e))
+        return buildrecord
+
+    def update_buildrecord(self, package):
+        self.delete_buildrecord(package)
+        return self.insert_buildrecord(package)

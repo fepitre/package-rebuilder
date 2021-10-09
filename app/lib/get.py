@@ -56,6 +56,7 @@ def getPackage(package_as_dict):
     return package
 
 
+# fixme: introduce a build timestamp: currently timestamp is given by logfile basename
 class Package(dict):
     def __init__(self, name, epoch, version, arch, distribution, buildinfos,
                  metadata=None, artifacts=None, status=None, log=None, diffoscope=None,

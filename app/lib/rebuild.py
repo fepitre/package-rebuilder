@@ -153,7 +153,7 @@ class DebianRebuilder(BaseRebuilder):
             elif result.returncode == 2:
                 package.status = "unreproducible"
             else:
-                package.status = "failure"
+                package.status = "unknown"
 
             if result.returncode not in (0, 2):
                 raise subprocess.CalledProcessError(

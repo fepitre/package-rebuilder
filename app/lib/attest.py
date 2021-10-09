@@ -92,13 +92,28 @@ class BaseAttester:
                 final_link["signed"]["products"].update(parsed_link["signed"]["products"])
             with open(f"{output}/rebuild.link", "w") as fd:
                 fd.write(json.dumps(final_link))
-            cmd = ["in-toto-sign", "--gpg", self.keyid, "-f", "rebuild.link"]
-            subprocess.run(cmd, cwd=output, check=True)
+            self.sign_metadata("rebuild.link")
         except Exception as e:
             raise RebuilderExceptionAttest(f"Failed to merge links: {str(e)}")
         finally:
             if os.path.exists(f"{output}/rebuild.link"):
                 os.remove(f"{output}/rebuild.link")
+
+    def _sign_metadata(self, metadata, verify_only=False):
+        try:
+            cmd = ["in-toto-sign", "--gpg", self.keyid, "-f", metadata]
+            if verify_only:
+                cmd += ["--verify"]
+            result = subprocess.run(cmd, check=True)
+            return result.returncode == 0
+        except Exception as e:
+            raise RebuilderExceptionAttest(f"Failed to process link '{metadata}': {str(e)}")
+
+    def sign_metadata(self, metadata):
+        return self._sign_metadata(metadata)
+
+    def verify_metadata(self, metadata):
+        return self._sign_metadata(metadata, verify_only=True)
 
 
 def process_attestation(package, gpg_sign_keyid, files, reproducible, **kwargs):
