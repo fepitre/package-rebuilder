@@ -170,9 +170,6 @@ def generate_results(app, project):
                         pkg = rebuild_results[str(package)]
                         if pkg.status in ("reproducible", "unreproducible", "failure", "retry"):
                             pkg["badge"] = BADGES[pkg.status]
-                            # fixme: temporary fixup
-                            pkg.log = pkg.log.replace("/var/lib/rebuilder/rebuild/", "/")\
-                                .replace("/rebuild/", "/")
                             if pkg.diffoscope:
                                 pkg.diffoscope = pkg.diffoscope.\
                                     replace("/var/lib/rebuilder/rebuild/", "/").\
