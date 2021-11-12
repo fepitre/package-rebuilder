@@ -236,10 +236,10 @@ def report(package, **kwargs):
     log_dir = f"{output_dir}/logs"
     os.makedirs(log_dir, exist_ok=True)
     src_log = package.log
+    if not src_log or not os.path.exists(src_log):
+        raise RebuilderExceptionReport(f"Cannot find build log file {src_log}")
     log_file = os.path.basename(package.log)
     dst_log = f"{log_dir}/{log_file}"
-    if not os.path.exists(src_log):
-        raise RebuilderExceptionReport(f"Cannot find build log file {src_log}")
     if not os.path.exists(dst_log):
         shutil.move(src_log, dst_log)
 
