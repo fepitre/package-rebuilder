@@ -103,7 +103,8 @@ class DebianRebuilder(BaseRebuilder):
             "--builder=mmdebstrap",
             "--output={}".format(tempdir),
             "--query-url={}".format(self.snapshot_query_url),
-            "--snapshot-mirror={}".format(self.snapshot_mirror)
+            "--snapshot-mirror={}".format(self.snapshot_mirror),
+            "--build-options-nocheck"
         ]
         if self.sign_keyid:
             build_cmd += ["--gpg-sign-keyid", self.sign_keyid]
