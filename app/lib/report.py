@@ -223,6 +223,9 @@ def generate_results(app, project):
             for ps in results[dist][sum_arches].keys():
                 generate_plots(results[dist][sum_arches][ps], dist, ps, sum_arches, results_path)
                 plots[ps] = f"{dist}_{ps}.{sum_arches}.png"
+
+            with open(f"{results_path}/{project}_{dist}.json", "w") as fd:
+                fd.write(json.dumps({dist: results[dist]}))
             # data = {
             #     "dist": f"{project} {dist} ({sum_arches})",
             #     "results": results[dist][sum_arches],
