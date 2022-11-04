@@ -39,7 +39,7 @@ services:
       - CELERY_BROKER_URL=redis://broker:6379/0
       - CELERY_RESULT_BACKEND=mongodb://backend:27017
       - GNUPGHOME=tests/gnupg
-      - PACKAGE_REBUILDER_CONF=tests/rebuilder.conf
+      - PACKAGE_REBUILDER_CONF=tests/rebuilder.yml
       - PYTHONPATH=/app
     command: pytest-3 -v --color=yes --cov app --cov-report term --cov-report html:artifacts/htmlcov --cov-report xml:/artifacts/coverage.xml --junitxml=artifacts/app.xml tests/
 #--log-cli-level=DEBUG

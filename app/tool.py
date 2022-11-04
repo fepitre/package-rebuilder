@@ -3,10 +3,10 @@ import glob
 import json
 import os
 
-from app.lib.attest import BaseAttester
-from app.lib.common import DEBIAN, DEBIAN_ARCHES, parse_deb_buildinfo_fname
-from app.lib.get import getPackage
-from app.lib.rebuild import getRebuilder
+from app.attest import BaseAttester
+from app.common import DEBIAN, DEBIAN_ARCHES, parse_deb_buildinfo_fname
+from app.get import getPackage
+from app.rebuild import getRebuilder
 
 
 def metadata_to_db(app, dist, **kwargs):

@@ -1,12 +1,9 @@
 import os
 import pytest
-import pytest_mock
-import requests_mock
-import requests
 from unittest.mock import MagicMock, patch
 
-from app.lib.exceptions import RebuilderExceptionDist
-from app.lib.get import RebuilderDist, DebianRepository, QubesRepository, \
+from app.exceptions import RebuilderExceptionDist
+from app.get import RebuilderDist, DebianRepository, QubesRepository, \
     DebianPackage, QubesPackage, getPackage
 
 TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))

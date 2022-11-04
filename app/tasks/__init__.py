@@ -26,17 +26,17 @@ import os
 import shutil
 
 from app.celery import app
-from app.lib.log import log
-from app.config import Config
-from app.lib.exceptions import RebuilderException, \
+from app.log import log
+from app.config import config
+from app.exceptions import RebuilderException, \
     RebuilderExceptionUpload, RebuilderExceptionBuild, RebuilderExceptionReport, \
     RebuilderExceptionDist, RebuilderExceptionAttest, RebuilderExceptionGet
-from app.lib.common import get_project
-from app.lib.get import getPackage, RebuilderDist
-from app.lib.tool import metadata_to_db, get_rebuild_packages, get_celery_queued_tasks
-from app.lib.rebuild import getRebuilder
-from app.lib.attest import process_attestation
-from app.lib.report import generate_results
+from app.common import get_project
+from app.get import getPackage, RebuilderDist
+from app.tool import metadata_to_db, get_rebuild_packages, get_celery_queued_tasks
+from app.rebuild import getRebuilder
+from app.attest import process_attestation
+from app.report import generate_results
 
 
 # fixme: improve serialize/deserialize Package
@@ -44,7 +44,7 @@ from app.lib.report import generate_results
 class BaseTask(celery.Task):
     autoretry_for = (RebuilderExceptionBuild, RebuilderExceptionReport, RebuilderExceptionAttest,)
     throws = (RebuilderException,)
-    max_retries = Config["celery"]["max_retries"]
+    max_retries = config["celery"]["max_retries"]
     # Let snapshot service to get the latest data from official repositories
     default_retry_delay = 60 * 60
 
@@ -97,13 +97,13 @@ def _metadata_to_db(dist):
 
 @app.on_after_finalize.connect
 def setup_periodic_tasks(sender, **kwargs):
-    for project in Config["project"].keys():
-        schedule_get = Config["project"][project]["schedule_get"]
-        for dist in Config["project"][project]["dist"]:
+    for project in config["project"].keys():
+        schedule_get = config["project"][project]["schedule_get"]
+        for dist in config["project"][project]["dist"]:
             sender.add_periodic_task(schedule_get, get.s(dist), name=dist)
 
         # fixme: improve how we expose results
-        schedule_generate_results = Config["project"][project]["schedule_generate_results"]
+        schedule_generate_results = config["project"][project]["schedule_generate_results"]
         sender.add_periodic_task(schedule_generate_results, _generate_results.s(project))
 
 
@@ -187,8 +187,8 @@ def attest(package, **kwargs):
     if not os.path.exists(package.artifacts):
         raise RebuilderExceptionAttest(f"Cannot find package artifacts for {package}")
 
-    gpg_sign_keyid = Config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
-    gpg_sign_keyid_unreproducible = Config["project"].get(project, {}).get('in-toto-sign-key-unreproducible-fpr', None)
+    gpg_sign_keyid = config["project"].get(project, {}).get('in-toto-sign-key-fpr', None)
+    gpg_sign_keyid_unreproducible = config["project"].get(project, {}).get('in-toto-sign-key-unreproducible-fpr', None)
     if gpg_sign_keyid and gpg_sign_keyid_unreproducible:
         if not os.path.exists(f"{package.artifacts}/summary.out"):
             raise RebuilderExceptionAttest(f"Cannot find summary results for {package}")
@@ -291,9 +291,9 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
         log.error("Failed to parse package.")
         raise RebuilderExceptionUpload from e
 
-    ssh_key = Config["common"].get("repo-ssh-key", None)
-    remote_ssh_host = Config["common"].get("repo-remote-ssh-host", None)
-    remote_ssh_basedir = Config["common"].get("repo-remote-ssh-basedir", None)
+    ssh_key = config["common"].get("repo-ssh-key", None)
+    remote_ssh_host = config["common"].get("repo-remote-ssh-host", None)
+    remote_ssh_basedir = config["common"].get("repo-remote-ssh-basedir", None)
 
     if package:
         project = get_project(package.distribution)
@@ -301,11 +301,11 @@ def upload(package=None, project=None, upload_results=False, upload_all=False):
     if not project:
         raise RebuilderExceptionUpload(f"Cannot determine underlying project for {package}")
 
-    ssh_key = Config["project"][project].get(
+    ssh_key = config["project"][project].get(
         "repo-ssh-key", ssh_key)
-    remote_ssh_host = Config["project"][project].get(
+    remote_ssh_host = config["project"][project].get(
         "repo-remote-ssh-host", remote_ssh_host)
-    remote_ssh_basedir = Config["project"][project].get(
+    remote_ssh_basedir = config["project"][project].get(
         "repo-remote-ssh-basedir", remote_ssh_basedir)
 
     try:

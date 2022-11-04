@@ -34,9 +34,9 @@ try:
 except ImportError:
     debian = None
 
-from app.lib.exceptions import RebuilderExceptionAttest
-from app.lib.log import log
-from app.lib.rebuild import getRebuilder
+from app.exceptions import RebuilderExceptionAttest
+from app.log import log
+from app.rebuild import getRebuilder
 
 
 class BaseAttester:
@@ -57,11 +57,20 @@ class BaseAttester:
 
     def generate_metadata(self, artifacts, filenames):
         if not self.keyid:
-            raise RebuilderExceptionAttest("No GPG key id provided for metadata generation!")
+            raise RebuilderExceptionAttest(
+                "No GPG key id provided for metadata generation!"
+            )
         if not filenames:
-            raise RebuilderExceptionAttest(f"No files provided for in-toto metadata generation!")
+            raise RebuilderExceptionAttest(
+                f"No files provided for in-toto metadata generation!"
+            )
         output = tempfile.mkdtemp(dir=artifacts)
-        cmd = ["in-toto-run", "--step-name=rebuild", "--no-command", "--products"] + filenames
+        cmd = [
+            "in-toto-run",
+            "--step-name=rebuild",
+            "--no-command",
+            "--products",
+        ] + filenames
         cmd += ["--gpg", self.keyid, "--metadata-directory", output]
         if self.gnupghome:
             cmd += ["--gpg-home", self.gnupghome]
@@ -70,12 +79,16 @@ class BaseAttester:
             result = subprocess.run(cmd, cwd=artifacts, check=True)
             return output
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            raise RebuilderExceptionAttest(f"in-toto metadata generation failed: {str(e)}")
+            raise RebuilderExceptionAttest(
+                f"in-toto metadata generation failed: {str(e)}"
+            )
 
     # fixme: improve merge as it does not support concurrent access
     def merge_metadata(self, output):
         if not self.keyid:
-            raise RebuilderExceptionAttest("No GPG key id provided for metadata generation!")
+            raise RebuilderExceptionAttest(
+                "No GPG key id provided for metadata generation!"
+            )
         links = glob.glob(f"{output}/rebuild.{self.keyid[:8].lower()}.*.link")
         if links and len(links) > 1:
             log.debug(f"in-toto: {output}: multiple arch links detected")
@@ -83,12 +96,14 @@ class BaseAttester:
         try:
             for link in links:
                 log.debug(f"in-toto: {output}: merging link {os.path.basename(link)}")
-                with open(link, 'r') as fd:
+                with open(link, "r") as fd:
                     parsed_link = json.loads(fd.read())
                 if not final_link:
                     final_link = parsed_link
                     del final_link["signatures"]
-                final_link["signed"]["products"].update(parsed_link["signed"]["products"])
+                final_link["signed"]["products"].update(
+                    parsed_link["signed"]["products"]
+                )
             with open(f"{output}/rebuild.link", "w") as fd:
                 fd.write(json.dumps(final_link))
             cmd = ["in-toto-sign", "--gpg", self.keyid, "-f", "rebuild.link"]
@@ -131,8 +146,8 @@ def process_attestation(package, gpg_sign_keyid, files, reproducible, **kwargs):
     package.metadata[key] = f"{outputdir}/{final_link}"
 
     # generate symlinks for binary packages
-    files_names = [f.split('_')[0] for f in files]
-    os.chdir(os.path.join(outputdir, "../../"))
+    files_names = [f.split("_")[0] for f in files]
+    os.chdir(os.path.join(outputdir, "../"))
     if not package.files:
         package.files = {}
     for binpkg in parsed_buildinfo.get_binary():

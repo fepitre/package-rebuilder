@@ -3,9 +3,8 @@ import os
 import shutil
 import tempfile
 
-from app.lib.exceptions import RebuilderExceptionAttest
-from app.lib.get import getPackage
-from app.lib.attest import process_attestation
+from app.get import getPackage
+from app.attest import process_attestation
 
 TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 

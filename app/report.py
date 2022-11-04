@@ -26,9 +26,9 @@ import matplotlib.pyplot as plt
 from jinja2 import Template
 
 from app.config import Config
-from app.lib.exceptions import RebuilderException
-from app.lib.get import RebuilderDist, getPackage
-from app.lib.tool import get_rebuild_packages, get_celery_active_tasks
+from app.exceptions import RebuilderException
+from app.get import RebuilderDist, getPackage
+from app.tool import get_rebuild_packages, get_celery_active_tasks
 
 HTML_TEMPLATE = Template("""<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">

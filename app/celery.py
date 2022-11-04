@@ -19,33 +19,34 @@
 #
 
 import celery
-from app.config import Config
-from app.lib.log import log
+
+from app.config import config
+from app.log import log
 
 app = celery.Celery("PackageRebuilder")
 
 celery_app_conf = {
-    "broker_url": Config["celery"]["broker"],
-    "result_backend": Config["celery"]["backend"],
+    "broker_url": config["celery"]["broker"],
+    "result_backend": config["celery"]["backend"],
     "include": [
         "app.tasks.rebuilder",
     ],
     "enable_utc": True,
     "timezone": "UTC",
     "task_routes": {
-        "app.tasks.rebuilder.get": {"queue": "get"},
-        "app.tasks.rebuilder.rebuild": {"queue": "rebuild"},
-        "app.tasks.rebuilder.attest": {"queue": "attest"},
-        "app.tasks.rebuilder.report": {"queue": "report"},
-        "app.tasks.rebuilder.upload": {"queue": "upload"},
-        "app.tasks.rebuilder._generate_results": {"queue": "report"},
-        "app.tasks.rebuilder._metadata_to_db": {"queue": "get"},
-    }
+        "app.tasks.get": {"queue": "get"},
+        "app.tasks.rebuild": {"queue": "rebuild"},
+        "app.tasks.attest": {"queue": "attest"},
+        "app.tasks.report": {"queue": "report"},
+        "app.tasks.upload": {"queue": "upload"},
+        "app.tasks._generate_results": {"queue": "report"},
+        "app.tasks._metadata_to_db": {"queue": "get"},
+    },
 }
 
 app.conf.update(**celery_app_conf)
 
-log.debug(Config)
+log.debug(config)
 
 if __name__ == "__main__":
     app.start()

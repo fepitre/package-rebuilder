@@ -26,8 +26,8 @@ import tempfile
 import glob
 
 from app.config import Config
-from app.lib.common import is_qubes, is_debian, is_fedora
-from app.lib.exceptions import RebuilderExceptionBuild
+from app.common import is_qubes, is_debian, is_fedora
+from app.exceptions import RebuilderExceptionBuild
 
 
 # fixme: don't use wrapper but import directly Rebuilder functions

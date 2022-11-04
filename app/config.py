@@ -18,73 +18,102 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
-import configparser
+import yaml
 import os
+from pathlib import Path
+
+from app.exceptions import RebuilderException
 
 DEFAULT_CONFIG = {
-    "broker": os.environ.get('CELERY_BROKER_URL', "redis://broker:6379/0"),
-    "backend": os.environ.get('CELERY_RESULT_BACKEND', "mongodb://backend:27017"),
+    "broker": os.environ.get("CELERY_BROKER_URL", "redis://broker:6379/0"),
+    "backend": os.environ.get("CELERY_RESULT_BACKEND", "mongodb://backend:27017"),
     "schedule_get": 1800,
     "schedule_generate_results": 300,
     "max_retries": 2,
-    "snapshot": "http://snapshot.notset.fr"
+    "snapshot": "https://snapshot.notset.fr",
 }
 
 # Currently supported project
 SUPPORTED_PROJECTS = ["qubesos", "debian", "fedora"]
 
-# Filter allowed options in sections for projects (e.g. 'common', 'qubesos', 'debian', etc.)
+# Filter allowed options
 SECTION_OPTIONS = [
-    "schedule_get", "snapshot", "in-toto-sign-key-fpr", "in-toto-sign-key-unreproducible-fpr",
-    "repo-ssh-key", "repo-remote-ssh-host", "repo-remote-ssh-basedir", "dist",
-    "schedule_generate_results"
+    "schedule_get",
+    "snapshot",
+    "in-toto-sign-key-fpr",
+    "in-toto-sign-key-unreproducible-fpr",
+    "repo-ssh-key",
+    "repo-remote-ssh-host",
+    "repo-remote-ssh-basedir",
+    "dist",
+    "schedule_generate_results",
 ]
 
 
-config = configparser.RawConfigParser(allow_no_value=False)
+class RebuilderConfiguration(dict):
+    def __init__(self, conf_file):
+        if isinstance(conf_file, str):
+            conf_file = Path(conf_file).resolve()
 
+        if not conf_file.exists():
+            raise RebuilderException(f"Cannot find {conf_file}.")
 
-config_path = os.environ.get("PACKAGE_REBUILDER_CONF", f"{os.path.curdir}/rebuilder.conf")
-if not os.path.exists(config_path):
-    raise ValueError(f"Cannot find config file: {config_path}")
-config.read(config_path)
+        try:
+            conf = yaml.safe_load(conf_file.read_text())
+        except (yaml.YAMLError, OSError) as e:
+            raise RebuilderException(f"Failed to load configuration: {str(e)}")
 
-Config = {
-    "celery": {
-        "broker": config.get("celery", "broker", fallback=DEFAULT_CONFIG["broker"]),
-        "backend": config.get("celery", "backend", fallback=DEFAULT_CONFIG["backend"]),
-        "max_retries": config.get("celery", "max_retries", fallback=DEFAULT_CONFIG["max_retries"]),
-    },
-    "common": {
-        "schedule_get": config.get("common", "schedule_get", fallback=DEFAULT_CONFIG["schedule_get"]),
-        "schedule_generate_results": config.get("common", "schedule_generate_results", fallback=DEFAULT_CONFIG["schedule_generate_results"]),
-        "snapshot": config.get("common", "snapshot", fallback=DEFAULT_CONFIG["snapshot"]),
-    },
-    "project": {}
-}
+        final_conf = {
+            "celery": {
+                "broker": conf.get("celery", {}).get(
+                    "broker", DEFAULT_CONFIG["broker"]
+                ),
+                "backend": conf.get("celery", {}).get(
+                    "backend", DEFAULT_CONFIG["backend"]
+                ),
+                "max_retries": conf.get("celery", {}).get(
+                    "max_retries", DEFAULT_CONFIG["max_retries"]
+                ),
+            },
+            "default": {
+                "schedule_get": conf.get("default", {}).get(
+                    "schedule_get", DEFAULT_CONFIG["schedule_get"]
+                ),
+                "schedule_generate_results": conf.get("default", {}).get(
+                    "schedule_generate_results",
+                    DEFAULT_CONFIG["schedule_generate_results"],
+                ),
+                "snapshot": conf.get("default", {}).get(
+                    "snapshot", DEFAULT_CONFIG["snapshot"]
+                ),
+            },
+            "project": {},
+        }
 
-if "common" in config.sections():
-    for option in SECTION_OPTIONS:
-        config_option = config.get("common", option, fallback=None)
-        if config_option:
-            if option == "dist":
-                # fixme: allow dist in common like it was mostly before this refactor?
+        for project in SUPPORTED_PROJECTS:
+            if project not in conf:
                 continue
-            if option in ("schedule_get", "schedule_generate_results"):
-                config_option = int(config_option)
-            Config["common"][option] = config_option
+            final_conf["project"].setdefault(project, {})
+            for option in SECTION_OPTIONS:
+                value = conf[project].get(
+                    option, conf.get("default", {}).get(option, None)
+                )
+                if value:
+                    conf["project"][project].setdefault(option, {})
+                    if option in ("schedule_get", "schedule_generate_results"):
+                        value = int(value)
+                    conf["project"][project][option] = value
 
-for project in SUPPORTED_PROJECTS:
-    if project not in config.sections():
-        continue
-    Config["project"][project] = {}
-    for option in SECTION_OPTIONS:
-        config_option = config.get(project, option,
-                                   fallback=Config["common"].get(option, None))
-        if config_option:
-            Config["project"][project].setdefault(option, {})
-            if option == "dist":
-                config_option = config_option.replace(' ', '\n').splitlines()
-            if option in ("schedule_get", "schedule_generate_results"):
-                config_option = int(config_option)
-            Config["project"][project][option] = config_option
+        super().__init__(**final_conf)
+
+
+config_path = (
+    Path(os.environ.get("PACKAGE_REBUILDER_CONF", f"{os.path.curdir}/rebuilder.conf"))
+    .expanduser()
+    .resolve()
+)
+
+if not config_path.exists():
+    raise ValueError(f"Cannot find config file: {config_path}")
+
+config = RebuilderConfiguration(config_path)

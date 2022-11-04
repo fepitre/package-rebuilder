@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.lib.exceptions import RebuilderExceptionBuild
-from app.lib.get import getPackage
-from app.lib.rebuild import BaseRebuilder, DebianRebuilder, QubesRebuilderDEB, getRebuilder
+from app.exceptions import RebuilderExceptionBuild
+from app.get import getPackage
+from app.rebuild import BaseRebuilder, DebianRebuilder, QubesRebuilderDEB, getRebuilder
 
 TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 

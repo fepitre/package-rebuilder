@@ -33,10 +33,10 @@ except ImportError:
     debian = None
 
 from packaging.version import parse as parse_version
-from app.lib.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_project, \
+from app.common import DEBIAN, DEBIAN_ARCHES, is_qubes, is_debian, is_fedora, get_project, \
     parse_deb_buildinfo_fname, parse_rpm_buildinfo_fname
-from app.lib.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
-from app.lib.log import log
+from app.exceptions import RebuilderExceptionDist, RebuilderExceptionGet
+from app.log import log
 
 
 def getPackage(package_as_dict):

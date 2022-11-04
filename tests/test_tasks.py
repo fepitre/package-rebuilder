@@ -1,15 +1,14 @@
 import glob
 import os
 import tempfile
-import requests_mock
 import shutil
 import pytest
 
 from unittest.mock import patch, MagicMock
 
 from app.celery import app
-from app.tasks.rebuilder import get, rebuild, attest, report
-from app.lib.rebuild import BaseRebuilder
+from app.tasks.__init__ import get, rebuild, attest, report
+from app.rebuild import BaseRebuilder
 
 TEST_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 os.environ["PACKAGE_REBUILDER_CONF"] = f"{TEST_DIR}/rebuilder.conf"
